@@ -105,12 +105,19 @@ export function registerAdminRoutes(app) {
     });
   });
 
-  app.post('/admin/users/:id/active', requireAdmin(), async (c) => {
-    const body = c.get('parsedBody') ?? (await c.req.parseBody());
+  /**
+   * Activate or deactivate an account.
+   *
+   * Two distinct paths rather than one path with a body flag, so the intent is
+   * visible in the request line and a truncated or malformed body cannot turn a
+   * deactivation into a no-op reactivation.
+   *
+   * @param {import('hono').Context} c
+   * @param {boolean} makeActive
+   */
+  const setActive = (c, makeActive) => {
     const target = findUserById(Number(c.req.param('id')));
     if (!target) return c.notFound();
-
-    const makeActive = body.active === '1';
 
     // Guard against an admin locking everyone out of the admin area, including
     // themselves. Recovering from that needs shell access to the container.
@@ -138,7 +145,10 @@ export function registerAdminRoutes(app) {
           : `${target.displayName} has been signed out and cannot sign in.`,
       }),
     });
-  });
+  };
+
+  app.post('/admin/users/:id/deactivate', requireAdmin(), (c) => setActive(c, false));
+  app.post('/admin/users/:id/activate', requireAdmin(), (c) => setActive(c, true));
 
   app.post('/admin/users/:id/role', requireAdmin(), async (c) => {
     const body = c.get('parsedBody') ?? (await c.req.parseBody());

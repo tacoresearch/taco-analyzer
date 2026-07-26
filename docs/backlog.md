@@ -5,6 +5,64 @@ conversation that produced it. Ordered roughly by when it should be picked up.
 
 ---
 
+## 0. First deploy shakedown (do this before anything else)
+
+**Nothing in this repository has been executed.** It was written against verified
+documentation and reviewed by eye, but no JavaScript runtime was available on the
+machine where it was built, so not one line has been parsed by an engine, let
+alone run. Treat the first deploy as the real test.
+
+Known and expected:
+
+- **`npm ci` will fail on the first install**, because there is no
+  `package-lock.json` yet (dependencies were never installed). `deploy/install.sh`
+  and `update.sh` fall back to `npm install`, which will work and generate one.
+  Commit the lockfile afterwards.
+- **Run `node scripts/check-syntax.js` first.** It parses every file without
+  executing it, and will catch typos far faster than a crashing service will.
+  Note the script itself has never run either; if it misbehaves,
+  `node --check <file>` on a couple of files is the manual equivalent.
+- **`npm test` has no tests yet.** `test/photos.test.js` was specified in detail
+  but never written (the session ran out before it landed). The photo pipeline is
+  the most intricate code here (hand-rolled JPEG segment walking, PNG chunk
+  parsing with CRC validation, WebP RIFF rewriting, TIFF/Exif offset arithmetic)
+  and it is the part most in need of tests. The full list of cases to cover is in
+  the git history of this file's sibling commits; at minimum test malformed and
+  truncated inputs for each format, GPS extraction in both TIFF byte orders, and
+  that a temp file never survives a validation failure.
+- **Cross-file call sites.** Components were written in parallel. The known
+  mismatches were reconciled (admin activate/deactivate paths, `addPhoto`
+  metadata, the extra optional view arguments), but more may remain. They present
+  as immediate crashes with clear stack traces, not subtle misbehaviour.
+- **The LXC hardening fallbacks in `install.sh` have never run.** The detection
+  for `243/CREDENTIALS` and `step NAMESPACE`, and the override it writes, are
+  reasoned from documented failure modes but unverified against a real container.
+- **Check the startup banner** for which password algorithm was selected. It
+  should say `argon2id` on Node 24.18; `scrypt` means the probe failed and is
+  worth investigating, though it is a safe fallback.
+
+---
+
+## 0b. Wire up the two client-side hooks the views already emit
+
+`server/views/` renders two attributes that `public/app.js` does not yet handle:
+
+- `data-password-toggle="<input id>"` on a show-password button (with
+  `aria-controls` and `aria-pressed`). NIST recommends offering a reveal option,
+  and the button is currently **inert**, which is worse than absent: it looks
+  clickable and does nothing.
+- `data-confirm="<sentence>"` on destructive admin submits, intended to intercept
+  and confirm before the POST.
+
+Both need small handlers in `public/app.js`, following that file's existing
+pattern of independently guarded features. The forms all work without them (the
+destructive actions are real POSTs and simply skip the confirmation), so this is a
+polish and honesty fix rather than a functional one. Alternative, if you would
+rather not add the JavaScript: drop the toggle button from
+`server/views/password.js` and `server/views/login.js`.
+
+---
+
 ## 1. Surface photo GPS coordinates in the survey UI
 
 **Status: half done.** Extraction is implemented; display is not.
