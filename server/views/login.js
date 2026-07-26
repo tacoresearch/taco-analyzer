@@ -11,6 +11,15 @@
  *  2. `error` and `notice` are server-authored sentences. Callers must not pass
  *     request-derived text through them. They are escaped either way, so the
  *     worst case is an ugly page rather than injected markup.
+ *
+ * Two smaller decisions:
+ *
+ *  - A show-password button is offered because NIST SP 800-63B asks for it:
+ *    keeping the value hidden makes a long passphrase, which is exactly what we
+ *    want people to use, hard to type correctly on a phone keyboard.
+ *  - The password input carries no `maxlength`, so a password manager filling a
+ *    very long value is never silently truncated into a login that fails for no
+ *    visible reason.
  */
 
 import { attrs, html } from '../lib/html.js';
@@ -41,7 +50,7 @@ export function loginPage({ csrfToken, email = '', error = null, notice = null, 
 
       <article class="card">
         <div class="card__body">
-          <form class="form" method="post" action="/login">
+          <form class="form" method="post" action="/login" novalidate>
             ${csrfField(csrfToken)}
             <input type="hidden" name="next"${attrs({ value: next || '' })}>
 
@@ -71,13 +80,6 @@ export function loginPage({ csrfToken, email = '', error = null, notice = null, 
                 spellcheck="false"
                 required>
               <div class="cluster">
-                <!--
-                  Offered because NIST SP 800-63B asks that a password can be
-                  shown while it is typed: hiding it makes long passphrases,
-                  which is what we want people to use, hard to type correctly.
-                  There is no maxlength on this input on purpose, so a manager
-                  filling a very long password is never silently truncated.
-                -->
                 <button
                   type="button"
                   class="btn btn--secondary btn--small"

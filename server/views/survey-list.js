@@ -12,7 +12,7 @@
  * row.
  */
 
-import { attrs, cx, html } from '../lib/html.js';
+import { attrs, html } from '../lib/html.js';
 import { formatDate, formatDateTime, pluralize } from '../lib/format.js';
 import { stateName } from '../lib/states.js';
 import { pageHeader, renderPage, scoreBadge } from './layout.js';
@@ -176,8 +176,8 @@ export function surveyListPage({
             <td role="cell" data-label="Where">${row.town}, ${stateName(row.state)}</td>
             <td role="cell" data-label="Visited">${formatDate(row.visited_on)}</td>
             <td role="cell" data-label="Taste">${scoreBadge(row.taste_score)}</td>
-            <td role="cell" data-label="Tacos" class="${cx('data-table__num', 'text-nums')}">${row.item_count}</td>
-            <td role="cell" data-label="Photos" class="${cx('data-table__num', 'text-nums')}">${row.photo_count}</td>
+            <td role="cell" data-label="Tacos" class="data-table__num text-nums">${row.item_count}</td>
+            <td role="cell" data-label="Photos" class="data-table__num text-nums">${row.photo_count}</td>
             <td role="cell" data-label="Status"><span class="badge">${
               row.status === 'submitted' ? 'Submitted' : 'Draft'
             }</span></td>

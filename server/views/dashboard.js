@@ -26,6 +26,18 @@ import { stateName } from '../lib/states.js';
 import { pageHeader, renderPage } from './layout.js';
 
 /**
+ * A count for display. SQLite hands back NULL for a SUM over no rows, and the
+ * aggregate query has already turned that into 0, so this is a second belt: a
+ * dashboard must not render "null" or crash on one missing aggregate.
+ *
+ * @param {unknown} value
+ */
+function count(value) {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? number.toLocaleString('en-US') : '0';
+}
+
+/**
  * One `.stat-card`. The value comes before the label in the DOM (it is the thing
  * being read) while the label is still the heading.
  *
@@ -133,22 +145,22 @@ export function dashboardPage({ user, csrfToken, stats, recent = [], flash = nul
 
       <div class="stat-grid">
         ${statCard({
-          value: stats.totalSurveys.toLocaleString('en-US'),
+          value: count(stats.totalSurveys),
           label: 'Surveys recorded',
-          detail: `Across ${pluralize(stats.distinctVenues, 'venue')} in ${pluralize(
-            stats.distinctStates,
+          detail: `Across ${pluralize(Number(stats.distinctVenues ?? 0), 'venue')} in ${pluralize(
+            Number(stats.distinctStates ?? 0),
             'state',
           )}`,
         })}
         ${statCard({
           value: formatScore(stats.avgTasteScore),
           label: 'Mean taste score',
-          detail: 'Out of 5. The six taste metrics, nothing else',
+          detail: 'Out of 5. The taste metrics only, nothing else',
         })}
         ${statCard({
-          value: stats.totalTacos.toLocaleString('en-US'),
+          value: count(stats.totalTacos),
           label: 'Tacos scored',
-          detail: `${pluralize(stats.totalItems, 'menu item')} recorded`,
+          detail: `${pluralize(Number(stats.totalItems ?? 0), 'menu item')} recorded`,
         })}
         ${statCard({
           value: formatMoney(stats.avgPricePerTacoCents),
@@ -156,12 +168,12 @@ export function dashboardPage({ user, csrfToken, stats, recent = [], flash = nul
           detail: 'Menu price divided by the tacos it buys',
         })}
         ${statCard({
-          value: stats.revisitedVenues.toLocaleString('en-US'),
+          value: count(stats.revisitedVenues),
           label: 'Venues revisited',
           detail: 'Where a consistency check becomes possible',
         })}
         ${statCard({
-          value: stats.photoCount.toLocaleString('en-US'),
+          value: count(stats.photoCount),
           label: 'Photos on file',
           detail: 'Location data stripped from every one',
         })}
@@ -169,16 +181,17 @@ export function dashboardPage({ user, csrfToken, stats, recent = [], flash = nul
 
       <div class="stack stack--tight">
         <p class="text-small text-muted">
-          The mean taste score is exactly that: the average of the six taste metrics.
-          Serving temperature and value are recorded on every taco and reported on its
-          own page, deliberately outside the taste score, so a well-made taco served
-          lukewarm still reports how good the recipe was.
+          The mean taste score is exactly that: the average of the taste metrics and
+          nothing else. Serving temperature and value are recorded on every taco and
+          reported on its own page, deliberately outside the taste score, so a well-made
+          taco served lukewarm still reports how good the recipe was.
         </p>
         <p class="text-small text-muted">
           The rubric describes a consistency modifier that applies when a venue is
           scored more than once. It is not computed yet;
-          ${pluralize(stats.revisitedVenues, 'venue')}
-          ${stats.revisitedVenues === 1 ? 'has' : 'have'} enough visits for it so far.
+          ${pluralize(Number(stats.revisitedVenues ?? 0), 'venue')}
+          ${Number(stats.revisitedVenues ?? 0) === 1 ? 'has' : 'have'} enough visits for
+          it so far.
         </p>
         ${window_ ? html`<p class="text-small text-muted">${window_}</p>` : ''}
       </div>
