@@ -1,0 +1,66 @@
+# Caddyfile for a public deployment of Taco Analyzer, using Let's Encrypt.
+# taco-analyzer-managed: this marker tells deploy/uninstall.sh the file is ours.
+#
+# deploy/install.sh copies this file to /etc/caddy/Caddyfile and substitutes:
+#   __HOSTNAME__  the public name you passed to --hostname (for example taco.example.org)
+#   __PORT__      the app's local port (default 8787)
+#   __EMAIL__     the address you passed to --email (expiry notices, ACME account)
+# If you edit /etc/caddy/Caddyfile by hand, replace those tokens yourself.
+#
+# BEFORE THIS CAN WORK
+#   1. A public DNS A record (and AAAA if you have IPv6) for __HOSTNAME__ must
+#      point at this machine's public address.
+#   2. Inbound TCP 80 AND 443 must reach this machine. Port 80 is not optional:
+#      it serves the HTTP-01 challenge and the redirect to HTTPS.
+#   3. If the machine is behind NAT, forward both ports.
+#
+# WHAT CADDY DOES FOR YOU AUTOMATICALLY
+#   - Obtains and renews the certificate (roughly every 60 days, no cron needed).
+#   - Serves an HTTP -> HTTPS redirect on port 80.
+#   - Staples OCSP and picks safe TLS versions and cipher suites.
+#   There is nothing to configure for any of that; do not add it back.
+
+{
+	# Used for the ACME account and expiry warnings. A real, monitored mailbox.
+	email __EMAIL__
+
+	servers {
+		protocols h1 h2 h3
+	}
+}
+
+__HOSTNAME__ {
+	encode zstd gzip
+
+	# See the note in Caddyfile.lan.example: kept slightly above the app's
+	# MAX_UPLOAD_BYTES so multipart overhead does not cause a proxy-level reject.
+	request_body {
+		max_size 12MB
+	}
+
+	reverse_proxy 127.0.0.1:__PORT__ {
+		# OVERWRITES X-Forwarded-For rather than appending. Caddy appends by
+		# default, which would let a client forge its own source address and
+		# evade the app's per-IP login throttling (the app runs with
+		# TRUST_PROXY=1 behind this proxy).
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Forwarded-Host {host}
+
+		transport http {
+			dial_timeout 5s
+		}
+	}
+
+	log {
+		output file /var/log/caddy/taco-analyzer.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+	}
+}
+
+# NOTE ON HSTS: the application sends Strict-Transport-Security itself, but only
+# when it knows it is being served over TLS (COOKIE_SECURE=1). Do not add a
+# duplicate header here, and do not add "preload" without understanding that it
+# is effectively irreversible for the whole domain.

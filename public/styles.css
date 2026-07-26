@@ -1,0 +1,2765 @@
+/* ==========================================================================
+   Taco Analyzer, design system
+   --------------------------------------------------------------------------
+   No frameworks, no build step, no preprocessor, no remote @import, no web
+   fonts. System font stack only so the app is fast and works offline on a LAN.
+
+   Ships under a strict CSP: `script-src 'self'; style-src 'self'`. Nothing in
+   here needs 'unsafe-inline'. There are no inline styles anywhere in the app;
+   the one dynamic value (the progress bar fill) is written by app.js as a CSS
+   custom property through the CSSOM, which style-src does not gate.
+
+   Mobile first. Base styles target a 360px-wide phone held one-handed in a
+   taco line. Everything wider is layered on with min-width media queries in
+   the MEDIA QUERIES section near the bottom.
+
+   Cascade order of the sections below:
+     1.  TOKENS
+     2.  RESET AND BASE
+     3.  LAYOUT
+     4.  CHROME
+     5.  FEEDBACK
+     6.  FORMS
+     7.  THE SCALE
+     8.  BUTTONS
+     9.  DATA DISPLAY
+     10. UTILITIES
+     11. MEDIA QUERIES
+     12. PRINT
+
+   Visual direction: monochrome, calm form; 1990s Taco Bell only at the edges
+   (top stripe, wordmark, focus rings, badges, active states).
+
+   Contrast: every colour pairing used for text or for a UI boundary was
+   computed against WCAG 2.x, and the ratios are recorded in
+   docs/ui-classes.md. Two rules that shaped the token set:
+     - The greys given as `--border` / `--border-strong` land at 1.3:1 to 2.1:1
+       against the page. They are decorative hairlines only. Interactive
+       boundaries (inputs, chips, secondary buttons) use `--border-control`,
+       a separate token chosen to clear 3:1 on every surface.
+     - Raw --tb-purple, --tb-magenta and --tb-teal fail 4.5:1 as text on the
+       dark page, and raw --tb-teal / --tb-yellow fail on white. Accent *text*
+       therefore goes through the `--accent-*-text` tokens, which are tinted
+       per theme. The raw brand hexes are used for fills and the gradient.
+   ========================================================================== */
+
+
+/* ==========================================================================
+   1. TOKENS
+   ========================================================================== */
+
+:root {
+  /* --- Brand palette. Fixed values, identical in both themes. Used for the
+         top stripe gradient and for solid fills, never directly as text. --- */
+  --tb-purple: #6E2A8C;
+  --tb-purple-lt: #9B4FC0;
+  --tb-magenta: #E5177E;
+  --tb-teal: #00B3B8;
+  --tb-teal-lt: #2ED9C3;
+  --tb-yellow: #FFC72C;
+
+  /* --- Dark greys. Dark is the default theme. --- */
+  --page: #121114;
+  --surface: #1B1A1F;
+  --raised: #232228;
+  --border: #33313A;
+  --border-strong: #4A4753;
+  --text: #EDEBF0;
+  --muted: #A79FB0;
+
+  /* Interactive boundary colour. Deliberately lighter than --border-strong so
+     input and chip edges clear the 3:1 required by WCAG 1.4.11 on all three
+     dark surfaces (4.19 / 3.86 / 3.52). */
+  --border-control: #7A7488;
+  --border-control-hover: #A79FB0;
+
+  /* Disabled and read-only. WCAG exempts inactive controls, but these are kept
+     legible on purpose rather than faded to nothing. */
+  --disabled-bg: #1F1E23;
+  --disabled-text: #8A8496;
+  --readonly-bg: #1F1E23;
+
+  /* --- Accent text tints. Tuned per theme to pass 4.5:1 as body text. --- */
+  --accent-purple-text: #C08FE0;
+  --accent-magenta-text: #FF4D9D;
+  --accent-teal-text: #2ED9C3;
+  --accent-yellow-text: #FFC72C;
+
+  /* --- Semantic roles. --- */
+  --focus-ring: var(--tb-teal-lt);
+
+  --selected-fill: var(--tb-purple);
+  --selected-border: var(--tb-purple-lt);
+  --selected-text: #EDEBF0;
+
+  --success-text: var(--accent-teal-text);
+  --success-border: var(--tb-teal-lt);
+  --error-text: var(--accent-magenta-text);
+  --error-border: var(--tb-magenta);
+  --info-text: var(--accent-purple-text);
+  --info-border: var(--tb-purple-lt);
+  --warn-text: var(--accent-yellow-text);
+  --warn-border: var(--tb-yellow);
+
+  --danger-fill: #C4126A;
+  --danger-border: #FF4D9D;
+  --danger-text: var(--accent-magenta-text);
+  --on-accent: #FFFFFF;
+
+  /* --- Spacing scale, 0.25rem base. --- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+
+  /* --- Radii. --- */
+  --radius-1: 4px;
+  --radius-2: 8px;
+  --radius-3: 14px;
+  --radius-pill: 999px;
+
+  /* --- Type. --- */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, "Noto Sans", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas,
+    "Liberation Mono", monospace;
+
+  --fs-200: 0.75rem;
+  --fs-300: 0.8125rem;
+  --fs-400: 1rem;
+  --fs-500: clamp(1.0625rem, 1rem + 0.35vw, 1.1875rem);
+  --fs-600: clamp(1.1875rem, 1.08rem + 0.9vw, 1.4375rem);
+  --fs-700: clamp(1.4375rem, 1.25rem + 1.5vw, 1.9375rem);
+  --fs-800: clamp(2rem, 1.55rem + 3vw, 2.75rem);
+
+  --lh-tight: 1.2;
+  --lh-snug: 1.35;
+  --lh-body: 1.55;
+
+  /* --- Layout. --- */
+  --page-max: 44rem;
+  --page-max-wide: 68rem;
+  --stripe-h: 4px;
+
+  /* Reserved runway under a sticky action bar, used by scroll-padding and by
+     the spacer on .form so the last field is never parked behind the bar. */
+  --sticky-runway: 6.5rem;
+
+  /* --- Motion. Both tokens collapse to 0s under prefers-reduced-motion, which
+         is how this stylesheet honours the preference without needing
+         !important to out-specify component transitions. --- */
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --ease: cubic-bezier(0.2, 0, 0.2, 1);
+
+  /* --- Focus ring geometry. --- */
+  --ring-w: 3px;
+  --ring-offset: 2px;
+
+  /* Tell the UA to render native widgets, scrollbars and the select arrow to
+     match. Without this a dark page gets a white native select chevron. */
+  color-scheme: dark;
+}
+
+/* --------------------------------------------------------------------------
+   Light theme.
+
+   Selector structure so an explicit choice always wins:
+
+     :root                                   dark tokens (the default)
+     @media (light) :root:not([data-theme])  light, only when unset
+     :root[data-theme="light"]               light, explicit
+
+   `data-theme="dark"` needs no block of its own: it fails both light
+   selectors, so the base :root dark values apply even when the OS asks for
+   light. The two light blocks below are duplicates on purpose (there is no
+   preprocessor here). Keep them in sync.
+   -------------------------------------------------------------------------- */
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --page: #FAF9FB;
+    --surface: #FFFFFF;
+    --raised: #F2F0F5;
+    --border: #DDD9E3;
+    --border-strong: #B9B3C4;
+    --text: #1A1820;
+    --muted: #5C5567;
+
+    --border-control: #857E91;
+    --border-control-hover: #5C5567;
+
+    --disabled-bg: #EFEDF2;
+    --disabled-text: #8A8395;
+    --readonly-bg: #F2F0F5;
+
+    --accent-purple-text: #6E2A8C;
+    --accent-magenta-text: #AE0F5E;
+    --accent-teal-text: #00767A;
+    --accent-yellow-text: #7A5300;
+
+    --focus-ring: var(--tb-purple);
+
+    --selected-fill: var(--tb-purple);
+    --selected-border: var(--tb-purple);
+    --selected-text: #FFFFFF;
+
+    --success-text: var(--accent-teal-text);
+    --success-border: #00767A;
+    --error-text: var(--accent-magenta-text);
+    --error-border: #AE0F5E;
+    --info-text: var(--accent-purple-text);
+    --info-border: var(--tb-purple);
+    --warn-text: var(--accent-yellow-text);
+    --warn-border: #A87200;
+
+    --danger-fill: #C4126A;
+    --danger-border: #AE0F5E;
+    --danger-text: var(--accent-magenta-text);
+
+    color-scheme: light;
+  }
+}
+
+:root[data-theme="light"] {
+  --page: #FAF9FB;
+  --surface: #FFFFFF;
+  --raised: #F2F0F5;
+  --border: #DDD9E3;
+  --border-strong: #B9B3C4;
+  --text: #1A1820;
+  --muted: #5C5567;
+
+  --border-control: #857E91;
+  --border-control-hover: #5C5567;
+
+  --disabled-bg: #EFEDF2;
+  --disabled-text: #8A8395;
+  --readonly-bg: #F2F0F5;
+
+  --accent-purple-text: #6E2A8C;
+  --accent-magenta-text: #AE0F5E;
+  --accent-teal-text: #00767A;
+  --accent-yellow-text: #7A5300;
+
+  --focus-ring: var(--tb-purple);
+
+  --selected-fill: var(--tb-purple);
+  --selected-border: var(--tb-purple);
+  --selected-text: #FFFFFF;
+
+  --success-text: var(--accent-teal-text);
+  --success-border: #00767A;
+  --error-text: var(--accent-magenta-text);
+  --error-border: #AE0F5E;
+  --info-text: var(--accent-purple-text);
+  --info-border: var(--tb-purple);
+  --warn-text: var(--accent-yellow-text);
+  --warn-border: #A87200;
+
+  --danger-fill: #C4126A;
+  --danger-border: #AE0F5E;
+  --danger-text: var(--accent-magenta-text);
+
+  color-scheme: light;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 0s;
+    --motion-base: 0s;
+  }
+}
+
+
+/* ==========================================================================
+   2. RESET AND BASE
+   :where() keeps every reset at zero specificity so component rules and
+   utilities never have to fight it.
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:where(body, h1, h2, h3, h4, h5, h6, p, figure, blockquote, dl, dd, ol, ul,
+  fieldset, legend) {
+  margin: 0;
+  padding: 0;
+}
+
+:where(ul, ol)[class] {
+  list-style: none;
+}
+
+:where(fieldset) {
+  border: 0;
+  min-inline-size: 0;
+}
+
+html {
+  /* 16px base. Never set below this: iOS Safari auto-zooms any focused input
+     whose computed font-size is under 16px. */
+  font-size: 100%;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Anchor jumps from the error summary land clear of the sticky action bar. */
+  scroll-padding-block-end: var(--sticky-runway);
+  scroll-padding-block-start: var(--space-5);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+body {
+  margin: 0;
+  /* The fixed top stripe is 4px of chrome; give the document that back. */
+  padding-block-start: var(--stripe-h);
+  background-color: var(--page);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--fs-400);
+  line-height: var(--lh-body);
+  min-block-size: 100vh;
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+}
+
+:where(h1, h2, h3, h4, h5, h6) {
+  line-height: var(--lh-tight);
+  font-weight: 650;
+  text-wrap: balance;
+}
+
+h1 { font-size: var(--fs-700); letter-spacing: -0.01em; }
+h2 { font-size: var(--fs-600); }
+h3 { font-size: var(--fs-500); }
+h4 { font-size: var(--fs-400); }
+
+:where(p, li, dd) {
+  text-wrap: pretty;
+}
+
+:where(img, picture, svg, video, canvas) {
+  display: block;
+  max-inline-size: 100%;
+  block-size: auto;
+}
+
+:where(a) {
+  color: var(--text);
+  text-decoration-thickness: max(1px, 0.06em);
+  text-underline-offset: 0.18em;
+}
+
+:where(a:hover) {
+  text-decoration-thickness: max(2px, 0.11em);
+}
+
+:where(button, input, select, textarea) {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+
+:where(code, kbd, samp, pre) {
+  font-family: var(--font-mono);
+  font-size: 0.9375em;
+}
+
+:where(hr) {
+  border: 0;
+  border-block-start: 1px solid var(--border);
+  margin-block: var(--space-5);
+}
+
+:where(abbr[title]) {
+  text-decoration: none;
+}
+
+/* --------------------------------------------------------------------------
+   The one focus ring.
+
+   `outline` plus `outline-offset` rather than a box-shadow, for two reasons:
+   it follows non-rectangular shapes, and the offset gap is painted with the
+   surface behind the control. That gap is what keeps the ring visible even
+   when the control's own fill is the same hue as the ring (a checked purple
+   scale chip under the light theme, where ring and fill are both #6E2A8C).
+   The ring reads against the surface at 8.85:1 there.
+
+   :focus-visible only, never a bare :focus, so a mouse click on a card or a
+   button does not leave a ring behind. Nothing in this file sets
+   `outline: none` without putting a replacement in its place.
+   -------------------------------------------------------------------------- */
+
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: var(--ring-w) solid var(--focus-ring);
+  outline-offset: var(--ring-offset);
+  border-radius: var(--radius-1);
+}
+
+/* Older engines that lack :focus-visible still get the UA ring, because this
+   file never blanket-removes it. */
+
+::selection {
+  background-color: var(--selected-fill);
+  color: var(--selected-text);
+}
+
+::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+
+/* ==========================================================================
+   3. LAYOUT
+   ========================================================================== */
+
+.page {
+  inline-size: 100%;
+  max-inline-size: var(--page-max);
+  margin-inline: auto;
+  padding-inline: var(--space-4);
+  padding-block: var(--space-5) var(--space-6);
+  flex: 1 0 auto;
+}
+
+.page--wide {
+  max-inline-size: var(--page-max-wide);
+}
+
+/* Give the last field somewhere to sit when a sticky action bar is pinned
+   over the bottom of the viewport. */
+.page:has(.form-actions--sticky) {
+  padding-block-end: var(--space-4);
+}
+
+
+/* ==========================================================================
+   4. CHROME
+   The only place the 1990s personality is allowed to show up.
+   ========================================================================== */
+
+/* The gradient bar pinned to the very top of every page. Fixed rather than
+   sticky so it survives any scroll container; body compensates with
+   padding-block-start: var(--stripe-h). Purely decorative, so it carries no
+   role and no text. */
+.top-stripe {
+  position: fixed;
+  inset-block-start: 0;
+  inset-inline: 0;
+  block-size: var(--stripe-h);
+  z-index: 50;
+  background-image: linear-gradient(
+    90deg,
+    var(--tb-purple) 0%,
+    var(--tb-magenta) 50%,
+    var(--tb-teal) 100%
+  );
+}
+
+.skip-link {
+  position: absolute;
+  inset-block-start: var(--stripe-h);
+  inset-inline-start: var(--space-2);
+  z-index: 60;
+  /* Moved off-screen rather than display:none, so it stays focusable and
+     stays in the accessibility tree. */
+  transform: translateY(-200%);
+  transition: transform var(--motion-fast) var(--ease);
+  padding: var(--space-2) var(--space-4);
+  min-block-size: 44px;
+  display: inline-flex;
+  align-items: center;
+  background-color: var(--raised);
+  color: var(--text);
+  border: 2px solid var(--focus-ring);
+  border-end-start-radius: var(--radius-2);
+  border-end-end-radius: var(--radius-2);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+  outline-offset: -2px;
+}
+
+.site-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--surface);
+  border-block-end: 1px solid var(--border);
+}
+
+.wordmark {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35em;
+  margin-inline-end: auto;
+  font-size: var(--fs-500);
+  font-weight: 800;
+  line-height: var(--lh-tight);
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--text);
+}
+
+.wordmark__taco {
+  color: var(--text);
+}
+
+/* The single magenta word. Magenta is reserved for exactly this and for
+   destructive actions. Uses the per-theme tint, which clears 4.5:1 even
+   though a mark this large would only need 3:1. */
+.wordmark__analyzer {
+  color: var(--accent-magenta-text);
+}
+
+.site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-4);
+}
+
+.site-nav__link {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 44px;
+  padding-inline: var(--space-1);
+  font-size: var(--fs-300);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--muted);
+  border-block-end: 2px solid transparent;
+}
+
+.site-nav__link:hover {
+  color: var(--text);
+}
+
+/* Current page is marked by a border, a colour and a weight change together,
+   so the state is never carried by colour alone. */
+.site-nav__link[aria-current="page"] {
+  color: var(--text);
+  border-block-end-color: var(--selected-border);
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: 44px;
+  min-inline-size: 44px;
+  padding-inline: var(--space-3);
+  background-color: var(--raised);
+  color: var(--text);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-300);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  border-color: var(--border-control-hover);
+}
+
+/* Drawn with a gradient, not a font glyph and not an icon file: a circle
+   filled on one half. The filled half swaps sides when the toggle is pressed,
+   so the icon changes shape and not only colour. */
+.theme-toggle__icon {
+  inline-size: 1em;
+  block-size: 1em;
+  flex: none;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  background-image: linear-gradient(
+    90deg,
+    currentColor 0 50%,
+    transparent 50% 100%
+  );
+}
+
+.theme-toggle[aria-pressed="true"] .theme-toggle__icon {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0 50%,
+    currentColor 50% 100%
+  );
+}
+
+/* Engaged state gets a purple boundary on top of the icon flip. The visible
+   label text never changes; the state travels in aria-pressed. */
+.theme-toggle[aria-pressed="true"] {
+  border-color: var(--selected-border);
+  border-width: 2px;
+  padding-inline: calc(var(--space-3) - 1px);
+}
+
+.theme-toggle__label {
+  white-space: nowrap;
+}
+
+.site-footer {
+  padding: var(--space-5) var(--space-4);
+  border-block-start: 1px solid var(--border);
+  background-color: var(--surface);
+  color: var(--muted);
+  font-size: var(--fs-300);
+}
+
+.site-footer a {
+  color: var(--muted);
+}
+
+.site-footer a:hover {
+  color: var(--text);
+}
+
+
+/* ==========================================================================
+   5. FEEDBACK
+   Every variant states its meaning in a bold text label and changes its icon
+   shape. Colour is the third signal, never the only one.
+   ========================================================================== */
+
+.flash {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  margin-block-end: var(--space-5);
+  background-color: var(--surface);
+  border: 1px solid var(--border-control);
+  /* The variant stripe. On the inline-start edge so it survives RTL. */
+  border-inline-start: 5px solid var(--border-control);
+  border-radius: var(--radius-2);
+}
+
+/* An empty aria-hidden span. The glyph comes from CSS so the markup carries no
+   decorative text for a screen reader to read out. */
+.flash__icon {
+  flex: none;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  margin-block-start: 0.1rem;
+  display: grid;
+  place-items: center;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  font-size: var(--fs-300);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.flash__body {
+  min-inline-size: 0;
+}
+
+.flash__label {
+  font-weight: 700;
+}
+
+.flash__label::after {
+  /* Punctuation, so the label and the message do not run together when a
+     screen reader reads the block as one string. */
+  content: ": ";
+}
+
+.flash__message {
+  display: inline;
+}
+
+.flash p {
+  margin: 0;
+}
+
+.flash--success {
+  border-color: var(--success-border);
+  border-inline-start-color: var(--success-border);
+}
+
+.flash--success .flash__icon {
+  color: var(--success-text);
+}
+
+.flash--success .flash__icon::before {
+  content: "\2713"; /* check mark */
+}
+
+.flash--error {
+  border-color: var(--error-border);
+  border-inline-start-color: var(--error-border);
+}
+
+.flash--error .flash__icon {
+  color: var(--error-text);
+}
+
+.flash--error .flash__icon::before {
+  content: "\00D7"; /* multiplication sign, reads as an X at any size */
+  font-size: var(--fs-500);
+}
+
+.flash--info {
+  border-color: var(--info-border);
+  border-inline-start-color: var(--info-border);
+}
+
+.flash--info .flash__icon {
+  color: var(--info-text);
+}
+
+.flash--info .flash__icon::before {
+  content: "i";
+  font-style: italic;
+}
+
+/* Yellow is reserved for warnings and appears nowhere else. */
+.flash--warn {
+  border-color: var(--warn-border);
+  border-inline-start-color: var(--warn-border);
+}
+
+.flash--warn .flash__icon {
+  color: var(--warn-text);
+}
+
+.flash--warn .flash__icon::before {
+  content: "!";
+}
+
+/* --------------------------------------------------------------------------
+   Error summary. Rendered at the top of a failed submit with role="alert" and
+   tabindex="-1" so app.js can move focus to it.
+   -------------------------------------------------------------------------- */
+
+.error-summary {
+  padding: var(--space-4);
+  margin-block-end: var(--space-5);
+  background-color: var(--surface);
+  border: 2px solid var(--error-border);
+  border-radius: var(--radius-2);
+}
+
+/* The ring is drawn inside: this block runs the full width of a 360px screen,
+   so an outer ring would be clipped by the viewport edge. */
+.error-summary:focus-visible {
+  outline-offset: -6px;
+}
+
+.error-summary__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-500);
+  color: var(--error-text);
+}
+
+.error-summary__title::before {
+  content: "\00D7";
+  flex: none;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  display: grid;
+  place-items: center;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  font-size: var(--fs-500);
+  line-height: 1;
+}
+
+.error-summary__list {
+  margin: 0;
+  margin-block-start: var(--space-3);
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.error-summary__item {
+  position: relative;
+  padding-inline-start: var(--space-4);
+}
+
+.error-summary__item::before {
+  /* A shape marker rather than a colour, so the list still reads as a list of
+     faults in greyscale or in forced-colours mode. */
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block-start: 0.62em;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  background-color: var(--error-border);
+  transform: rotate(45deg);
+}
+
+/* Underlined always: these are the only links on the page a user in a hurry
+   has to be able to spot instantly. */
+.error-summary__link {
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+/* --------------------------------------------------------------------------
+   Per-field message, wired to its control with aria-describedby.
+   -------------------------------------------------------------------------- */
+
+.field-error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  margin-block-start: var(--space-2);
+  color: var(--error-text);
+  font-size: var(--fs-300);
+  font-weight: 600;
+}
+
+.field-error::before {
+  content: "\00D7";
+  flex: none;
+  inline-size: 1.05rem;
+  block-size: 1.05rem;
+  margin-block-start: 0.12rem;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  font-size: var(--fs-300);
+  line-height: 1;
+}
+
+/* --------------------------------------------------------------------------
+   Empty state, for "no surveys yet".
+   -------------------------------------------------------------------------- */
+
+.empty-state {
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+  background-color: var(--surface);
+  /* Dashed, so it reads as a placeholder rather than as content. */
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius-3);
+}
+
+.empty-state__title {
+  font-size: var(--fs-500);
+}
+
+.empty-state__body {
+  margin-block-start: var(--space-2);
+  margin-inline: auto;
+  max-inline-size: 34rem;
+  color: var(--muted);
+}
+
+.empty-state__actions {
+  margin-block-start: var(--space-5);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: center;
+}
+
+
+/* ==========================================================================
+   6. FORMS
+   Monochrome and calm. No colour behind a field, no colour behind a block of
+   text. The only accents that reach in here are the focus ring, the checked
+   scale chip, and error text.
+   ========================================================================== */
+
+.form {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.form__intro {
+  color: var(--muted);
+}
+
+/* --------------------------------------------------------------------------
+   Form section. A <fieldset> so the legend labels the whole group.
+   -------------------------------------------------------------------------- */
+
+.form-section {
+  /* Border on the block-start edge only on mobile: a full box costs 24px of
+     horizontal room the scale component needs at 360px. The full box comes
+     back at tablet width in the MEDIA QUERIES section. */
+  border: 0;
+  border-block-start: 1px solid var(--border);
+  padding: var(--space-5) 0 0;
+  margin: 0;
+  display: grid;
+  gap: var(--space-5);
+}
+
+.form-section:first-of-type {
+  border-block-start: 0;
+  padding-block-start: 0;
+}
+
+.form-section__legend {
+  /* A legend cannot be a flex or grid item in a fieldset, so it is positioned
+     as normal flow text and given its own bottom margin instead of relying on
+     the parent gap. */
+  padding: 0;
+  font-size: var(--fs-600);
+  font-weight: 650;
+  line-height: var(--lh-tight);
+}
+
+.form-section__blurb {
+  margin-block-start: var(--space-2);
+  color: var(--muted);
+  font-size: var(--fs-300);
+  max-inline-size: 60ch;
+}
+
+/* When the blurb sits directly after the legend it belongs to it visually, so
+   it collapses the gap the grid would otherwise add. */
+.form-section__legend + .form-section__blurb {
+  margin-block-start: calc(var(--space-5) * -1 + var(--space-2));
+}
+
+/* --------------------------------------------------------------------------
+   Field. One label, one control, optional hint and error.
+   -------------------------------------------------------------------------- */
+
+.field {
+  display: grid;
+  gap: var(--space-2);
+  /* So an error-summary jump does not park the field under the sticky bar. */
+  scroll-margin-block: var(--space-5) var(--sticky-runway);
+}
+
+.field__label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-weight: 600;
+  line-height: var(--lh-snug);
+}
+
+.field__hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-300);
+  max-inline-size: 60ch;
+}
+
+/* Hints are authored after the label and before the control, so the visual
+   order matches the DOM order that aria-describedby reads. */
+.field__control {
+  display: block;
+}
+
+/* --------------------------------------------------------------------------
+   Required and optional markers.
+
+   Nearly every question on this form is required, so marking required fields
+   would mean decorating almost every label with noise that carries no
+   information. The form instead states once, at the top, that everything is
+   required unless marked, and the rare optional field (the notes textarea)
+   carries .optional-marker. .required-marker is kept for the odd page where a
+   mixed form genuinely needs it.
+
+   Neither marker is the accessible source of truth: the `required` attribute
+   on the control is what assistive tech announces.
+   -------------------------------------------------------------------------- */
+
+.required-marker {
+  color: var(--error-text);
+  font-weight: 700;
+}
+
+.optional-marker {
+  padding: 0.1em 0.5em;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  font-size: var(--fs-200);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------------------
+   Text controls.
+
+   font-size is pinned at 1rem (16px). Anything smaller makes iOS Safari zoom
+   the viewport on focus, which on this form means losing your place in a list
+   of nine radio chips while standing in a queue.
+
+   `select` deliberately keeps its native `appearance`, so the platform draws
+   its own chevron and no background-image data URI or CSS-drawn triangle is
+   needed. `color-scheme` on :root is what makes that chevron light on the dark
+   theme; padding-inline-end reserves room for it.
+   -------------------------------------------------------------------------- */
+
+:where(
+  input[type="text"],
+  input[type="number"],
+  input[type="date"],
+  input[type="password"],
+  input[type="email"],
+  input[type="search"],
+  input[type="tel"],
+  input[type="url"],
+  select,
+  textarea
+) {
+  inline-size: 100%;
+  min-block-size: 44px;
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-2);
+  font-size: var(--fs-400);
+  line-height: var(--lh-snug);
+  transition: border-color var(--motion-fast) var(--ease);
+}
+
+:where(select) {
+  padding-inline-end: var(--space-6);
+}
+
+:where(textarea) {
+  min-block-size: 7.5rem;
+  padding-block: var(--space-3);
+  resize: vertical;
+  /* Long free text is the one place a taller line height earns its keep. */
+  line-height: var(--lh-body);
+}
+
+:where(input, select, textarea):hover:not(:disabled):not([readonly]) {
+  border-color: var(--border-control-hover);
+}
+
+/* Native spinners on a phone are a 12px target next to a 44px field. The
+   number input keeps its keyboard and its validation, loses the arrows. */
+:where(input[type="number"]) {
+  appearance: textfield;
+}
+
+:where(input[type="number"])::-webkit-outer-spin-button,
+:where(input[type="number"])::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+:where(input, select, textarea):disabled {
+  background-color: var(--disabled-bg);
+  color: var(--disabled-text);
+  border-color: var(--border);
+  border-style: dashed;
+  cursor: not-allowed;
+  /* No opacity change: opacity would drag the border below its measured
+     contrast, and the dashed border already signals the state without colour. */
+}
+
+:where(input, select, textarea)[readonly] {
+  background-color: var(--readonly-bg);
+  color: var(--muted);
+  border-color: var(--border);
+  cursor: default;
+}
+
+/* --------------------------------------------------------------------------
+   Invalid state.
+
+   Never a bare `:invalid`. That pseudo-class matches from first paint and
+   fires while somebody is still halfway through typing an email address, so
+   it is only ever honoured behind one of two server-set hooks:
+
+     .is-invalid            put on the control itself by the renderer. This is
+                            the authoritative signal, paired with
+                            aria-invalid="true" and an aria-describedby that
+                            points at the .field-error.
+     .form--validated       put on the <form> when re-rendering a submission
+                            that failed. Inside it, native :invalid is allowed
+                            to paint too, but not while the field has focus.
+   -------------------------------------------------------------------------- */
+
+:where(input, select, textarea).is-invalid,
+:where(input, select, textarea)[aria-invalid="true"],
+.form--validated :where(input, select, textarea):invalid:not(:focus) {
+  border-color: var(--error-border);
+  border-width: 2px;
+  /* Two signals, not just the colour: a heavier border and a visible inset
+     edge on the inline-start side that mirrors the .flash stripe. */
+  box-shadow: inset 3px 0 0 0 var(--error-border);
+}
+
+/* --------------------------------------------------------------------------
+   Input groups: money and quantity.
+   -------------------------------------------------------------------------- */
+
+.input-group {
+  display: flex;
+  align-items: stretch;
+  /* The group owns the border so the prefix and the input read as one control
+     and one focus target. */
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-2);
+  background-color: var(--surface);
+  overflow: hidden;
+  transition: border-color var(--motion-fast) var(--ease);
+}
+
+.input-group:hover:not(:has(:disabled)) {
+  border-color: var(--border-control-hover);
+}
+
+/* The ring is drawn around the whole group rather than around the bare input.
+   A text input always matches :focus-visible when focused, so this behaves
+   identically for pointer and keyboard users. */
+.input-group:has(:focus-visible) {
+  outline: var(--ring-w) solid var(--focus-ring);
+  outline-offset: var(--ring-offset);
+}
+
+/* The inner control gives up its own border and ring; the group has both. */
+.input-group :where(input, select) {
+  border: 0;
+  border-radius: 0;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+.input-group :where(input, select):focus-visible {
+  outline: none; /* replaced by the ring on .input-group above */
+}
+
+/* aria-hidden in the markup: the currency belongs in the label or hint text,
+   not in a floating glyph a screen reader has to stitch onto the value. */
+.input-prefix {
+  display: grid;
+  place-items: center;
+  padding-inline: var(--space-3);
+  background-color: var(--raised);
+  border-inline-end: 1px solid var(--border-control);
+  color: var(--muted);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.input-group:has(.is-invalid),
+.input-group:has([aria-invalid="true"]) {
+  border-color: var(--error-border);
+  border-width: 2px;
+}
+
+/* Money and quantity are short values. Capping the width stops a 44rem
+   desktop column from rendering a 600px-wide box for "$3.50", and signals the
+   expected length before anything is typed. */
+.input--money {
+  max-inline-size: 11rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.input--qty {
+  max-inline-size: 7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* When a capped input sits in a group, the group is what needs capping. */
+.input-group:has(.input--money) {
+  max-inline-size: 11rem;
+}
+
+.input-group:has(.input--qty) {
+  max-inline-size: 7rem;
+}
+
+/* --------------------------------------------------------------------------
+   Form actions.
+
+   --sticky uses `position: sticky`, not fixed. Sticky stays in normal flow, so
+   the bar occupies real space at the end of the form and can never sit on top
+   of the last field once the form is scrolled to the bottom. While scrolling
+   it pins to the viewport edge; html's scroll-padding-block-end and .field's
+   scroll-margin-block-end keep anchor jumps clear of it.
+
+   env(safe-area-inset-bottom) is added to the block-end padding so the buttons
+   clear the home indicator on a notched phone. The fallback 0px keeps the
+   calc() valid on browsers without env().
+   -------------------------------------------------------------------------- */
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.form-actions--sticky {
+  position: sticky;
+  inset-block-end: 0;
+  z-index: 20;
+  /* Bleed to the page edges, then pad back in, so the bar reads as chrome
+     spanning the full width instead of a floating card. */
+  margin-inline: calc(var(--space-4) * -1);
+  padding-inline: var(--space-4);
+  padding-block: var(--space-3);
+  padding-block-end: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+  background-color: var(--surface);
+  border-block-start: 1px solid var(--border-control);
+}
+
+.form-actions__note {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-300);
+}
+
+/* --------------------------------------------------------------------------
+   Photo field.
+
+   The preview is empty and hidden until app.js has an object URL to show. With
+   JavaScript off the file input still works; there is simply no thumbnail.
+   -------------------------------------------------------------------------- */
+
+.photo-field {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.photo-field__input {
+  inline-size: 100%;
+  min-block-size: 44px;
+  padding: var(--space-2);
+  background-color: var(--surface);
+  border: 1px dashed var(--border-control);
+  border-radius: var(--radius-2);
+  font-size: var(--fs-300);
+  cursor: pointer;
+}
+
+.photo-field__input::file-selector-button {
+  min-block-size: 36px;
+  margin-inline-end: var(--space-3);
+  padding-inline: var(--space-3);
+  background-color: var(--raised);
+  color: var(--text);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-1);
+  font-size: var(--fs-300);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Hidden until app.js sets [data-has-preview] on the wrapper. Kept out of the
+   layout entirely so an empty box never appears. */
+.photo-field__preview {
+  display: none;
+}
+
+.photo-field[data-has-preview] .photo-field__preview {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.photo-field__image {
+  inline-size: 5.5rem;
+  block-size: 5.5rem;
+  object-fit: cover;
+  background-color: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2);
+}
+
+.photo-field__filename {
+  margin: 0;
+  min-inline-size: 0;
+  color: var(--muted);
+  font-size: var(--fs-300);
+  overflow-wrap: anywhere;
+}
+
+/* role="status" in the markup, so the pre-upload check is announced. Empty and
+   collapsed when there is nothing to say. */
+.photo-field__message:empty {
+  display: none;
+}
+
+.photo-field__message {
+  margin: 0;
+  font-size: var(--fs-300);
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.photo-field__message[data-tone="error"] {
+  color: var(--error-text);
+}
+
+.photo-field__message[data-tone="warn"] {
+  color: var(--warn-text);
+}
+
+/* --------------------------------------------------------------------------
+   Progress meter.
+
+   The text node is the accessible answer and is rendered server-side, so with
+   JavaScript off the page still says "0 of 11 questions answered" truthfully.
+   The bar is decoration and is therefore hidden until app.js marks the meter
+   enhanced; without JS there is no way to set a width without an inline style,
+   and a bar frozen at zero next to correct text would be a lie.
+
+   app.js writes --progress (a 0 to 1 number) through the CSSOM. That is a
+   property write on a live element, not a `style` attribute in served HTML, so
+   `style-src 'self'` does not block it and no 'unsafe-inline' is needed.
+   -------------------------------------------------------------------------- */
+
+.progress-meter {
+  display: grid;
+  gap: var(--space-2);
+  padding-block: var(--space-2);
+}
+
+.progress-meter__text {
+  margin: 0;
+  font-size: var(--fs-300);
+  font-weight: 600;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-meter__track {
+  display: none;
+}
+
+.progress-meter[data-enhanced] .progress-meter__track {
+  display: block;
+  block-size: 6px;
+  background-color: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.progress-meter__bar {
+  block-size: 100%;
+  border-radius: inherit;
+  background-image: linear-gradient(
+    90deg,
+    var(--tb-purple) 0%,
+    var(--tb-magenta) 60%,
+    var(--tb-teal) 100%
+  );
+  /* scaleX on a full-width bar, so the gradient keeps its full colour range at
+     every fill level instead of only ever showing its purple end. */
+  transform: scaleX(var(--progress, 0));
+  transform-origin: left center;
+  transition: transform var(--motion-base) var(--ease);
+}
+
+/* All questions answered. A shape change, not only a colour change: the track
+   gains a solid ring. */
+.progress-meter[data-complete] .progress-meter__track {
+  border-color: var(--success-border);
+  border-width: 2px;
+}
+
+.progress-meter[data-complete] .progress-meter__text {
+  color: var(--text);
+}
+
+
+/* ==========================================================================
+   7. THE SCALE
+   Nine discrete options (1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5) as nine real
+   radio inputs sharing one `name`, so native arrow-key navigation, native
+   `required` validation and native form serialisation all work with no JS.
+
+   -------- Layout math, the 360px worst case --------
+   360  viewport
+   -32  .page padding-inline (16 each side)
+   ---- 328  content column
+    -0  .form-section has no horizontal padding on mobile, by design
+   ---- 328  section width
+    -0  .scale has no horizontal padding on mobile, by design
+   ---- 328  .scale__options width
+   -16  eight 2px column gaps
+   ---- 312  divided among nine chips
+
+   The columns are not equal. Whole numbers get 1.15fr and half steps 0.9fr,
+   which is one of the ways whole numbers read as the stronger choice:
+     total  = (5 x 1.15) + (4 x 0.9) = 5.75 + 3.6 = 9.35fr
+     whole  = 312 x 1.15 / 9.35 = 38.4px
+     half   = 312 x 0.90 / 9.35 = 30.0px
+   Both clear the 24px minimum target size of WCAG 2.5.8 by a wide margin, and
+   min-block-size: 44px makes every chip a comfortable one-thumb target. No
+   horizontal scroll at any point.
+   ========================================================================== */
+
+.scale {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: var(--space-3);
+  scroll-margin-block: var(--space-5) var(--sticky-runway);
+}
+
+.scale__legend {
+  padding: 0;
+  font-size: var(--fs-400);
+  font-weight: 600;
+  line-height: var(--lh-snug);
+}
+
+/* --------------------------------------------------------------------------
+   Anchors. Collapsed by default so the form stays scannable; the rubric text
+   is long and only needed when a score is genuinely borderline.
+   -------------------------------------------------------------------------- */
+
+.scale__anchors {
+  font-size: var(--fs-300);
+}
+
+.scale__anchors-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  /* 24px minimum target height for a control this small. */
+  min-block-size: 24px;
+  padding-block: var(--space-1);
+  color: var(--muted);
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+  inline-size: fit-content;
+}
+
+/* Safari still needs the WebKit marker suppressed separately. */
+.scale__anchors-summary::-webkit-details-marker {
+  display: none;
+}
+
+/* A CSS-drawn caret that rotates on open, so the disclosure state is carried
+   by rotation rather than by a font glyph that may not exist. */
+.scale__anchors-summary::before {
+  content: "";
+  flex: none;
+  inline-size: 0.45em;
+  block-size: 0.45em;
+  border-inline-end: 2px solid currentColor;
+  border-block-end: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--motion-fast) var(--ease);
+}
+
+.scale__anchors[open] > .scale__anchors-summary::before {
+  transform: rotate(45deg);
+}
+
+.scale__anchors[open] > .scale__anchors-summary {
+  color: var(--text);
+}
+
+.scale__anchor-list {
+  margin: 0;
+  margin-block-start: var(--space-2);
+  padding-inline-start: var(--space-3);
+  border-inline-start: 2px solid var(--border);
+  display: grid;
+  gap: var(--space-2);
+}
+
+/* Each label/value pair is wrapped in a div inside the <dl>, which is valid
+   HTML and lets the pair be a grid row. */
+.scale__anchor {
+  display: grid;
+  grid-template-columns: 1.5rem 1fr;
+  gap: var(--space-2);
+  align-items: baseline;
+}
+
+.scale__anchor dt {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.scale__anchor dd {
+  margin: 0;
+  color: var(--muted);
+}
+
+/* --------------------------------------------------------------------------
+   The chips.
+   -------------------------------------------------------------------------- */
+
+.scale__options {
+  display: grid;
+  /* Nine columns: whole, half, whole, half, whole, half, whole, half, whole.
+     The repeat() emits four whole+half pairs, then the trailing 5. */
+  grid-template-columns: repeat(4, 1.15fr 0.9fr) 1.15fr;
+  gap: 2px;
+}
+
+.scale__option {
+  position: relative;
+  /* Grid children must be allowed to shrink below their content size, or a
+     wide label would force the track wider and reintroduce overflow. */
+  min-inline-size: 0;
+  display: grid;
+}
+
+/* The input is visually hidden but still focusable and still the thing the
+   keyboard drives. Absolutely positioned, so the label alone fills the grid
+   cell. It is NOT display:none and NOT visibility:hidden, either of which
+   would take it out of the tab order and out of the accessibility tree. */
+.scale__input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.scale__label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-block-size: 44px;
+  padding: var(--space-1) 1px;
+  background-color: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-1);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-align: center;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background-color var(--motion-fast) var(--ease),
+    border-color var(--motion-fast) var(--ease);
+}
+
+/* Whole numbers are the primary choices: larger, heavier, and sitting on a
+   slightly raised surface. Half steps are quieter but equally reachable. */
+.scale__option--whole .scale__label {
+  font-size: var(--fs-400);
+  font-weight: 700;
+  background-color: var(--raised);
+}
+
+.scale__option--half .scale__label {
+  font-size: var(--fs-200);
+  font-weight: 500;
+  color: var(--muted);
+  border-style: dashed;
+}
+
+.scale__label:hover {
+  border-color: var(--border-control-hover);
+}
+
+/* --------------------------------------------------------------------------
+   The focus-ring-follows-the-input trick.
+
+   The input is the focus target but is one pixel wide and clipped, so a ring
+   drawn on it would be invisible. The adjacent-sibling combinator moves the
+   ring onto the label the user is actually looking at. This is why the markup
+   contract requires the input to be the immediate previous sibling of its
+   label inside .scale__option, with nothing between them.
+
+   :focus-visible rather than :focus, so arrow-key navigation and Tab show the
+   ring while a tap does not leave one behind. Arrow keys move focus AND change
+   the checked option in one step natively, which is exactly the behaviour we
+   want and the reason there is no JavaScript in this component at all.
+
+   The 2px outline-offset gap is painted with the surface behind the chip, so
+   the ring stays visible against a checked chip whose fill is the same hue as
+   the ring under the light theme (both #6E2A8C; the ring reads at 8.85:1
+   against the surface it sits on).
+   -------------------------------------------------------------------------- */
+
+.scale__input:focus-visible + .scale__label {
+  outline: var(--ring-w) solid var(--focus-ring);
+  outline-offset: var(--ring-offset);
+  /* Lift above neighbouring chips so the ring is never clipped by the 2px gap
+     between them. */
+  z-index: 2;
+}
+
+/* --------------------------------------------------------------------------
+   Checked state. Four simultaneous signals, only one of which is colour:
+     1. a 2px solid border where the resting state is 1px (dashed on halves)
+     2. a filled background
+     3. a check mark that only exists when checked
+     4. bold weight
+   -------------------------------------------------------------------------- */
+
+.scale__input:checked + .scale__label {
+  background-color: var(--selected-fill);
+  color: var(--selected-text);
+  border: 2px solid var(--selected-border);
+  border-style: solid;
+  font-weight: 700;
+  padding: calc(var(--space-1) - 1px) 0;
+}
+
+/* The digits live in their own span so the check indicator below them is a
+   sibling in the label's flex column rather than trailing the text. Its size is
+   deliberately NOT bumped on check: the chip must not change height under a
+   thumb that is still mid-tap. */
+.scale__number {
+  display: block;
+}
+
+/* The check indicator, drawn from two borders on a rotated box. No glyph, no
+   icon file, inherits currentColor so it stays legible on the purple fill
+   (#EDEBF0 on #6E2A8C is 7.48:1 dark, #FFFFFF on #6E2A8C is 8.85:1 light). */
+.scale__label::after {
+  content: "";
+  inline-size: 0.5rem;
+  block-size: 0.3rem;
+  border-inline-start: 2px solid currentColor;
+  border-block-end: 2px solid currentColor;
+  transform: rotate(-45deg) translate(1px, -1px);
+  /* Reserved, not removed: the chip does not change height when it is picked,
+     so the row never reflows under the thumb mid-tap. */
+  visibility: hidden;
+}
+
+.scale__input:checked + .scale__label::after {
+  visibility: visible;
+}
+
+.scale__input:disabled + .scale__label {
+  background-color: var(--disabled-bg);
+  color: var(--disabled-text);
+  border-color: var(--border);
+  cursor: not-allowed;
+}
+
+/* --------------------------------------------------------------------------
+   End anchors, the permanent "1 = poor, 5 = exceptional" reminder under the
+   row. aria-hidden in the markup, because the same information is in the
+   <details> anchor list in a form a screen reader can actually use.
+   -------------------------------------------------------------------------- */
+
+.scale__ends {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-200);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+/* Integer-only 1 to 5 variant for the observer variables. Five equal columns,
+   every one a whole number, so there is no strong/quiet distinction to make. */
+.scale--five .scale__options {
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--space-2);
+}
+
+.scale--five .scale__label {
+  font-size: var(--fs-400);
+  font-weight: 700;
+  background-color: var(--raised);
+}
+
+/* An invalid scale group gets a visible boundary on the whole fieldset, since
+   there is no single input to outline. */
+.scale.is-invalid {
+  padding-inline-start: var(--space-3);
+  border-inline-start: 4px solid var(--error-border);
+}
+
+
+/* ==========================================================================
+   8. BUTTONS
+   ========================================================================== */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-block-size: 44px;
+  min-inline-size: 44px;
+  padding-inline: var(--space-5);
+  background-color: var(--raised);
+  color: var(--text);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-2);
+  font-size: var(--fs-400);
+  font-weight: 650;
+  line-height: 1.1;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-fast) var(--ease),
+    border-color var(--motion-fast) var(--ease);
+}
+
+.btn:hover {
+  border-color: var(--border-control-hover);
+}
+
+/* Primary. Purple fill. On the dark theme the fill itself only reaches 2.13:1
+   against the page, so the boundary is carried by a --tb-purple-lt border
+   (3.83:1 against the page), which is what satisfies WCAG 1.4.11. */
+.btn--primary {
+  background-color: var(--tb-purple);
+  color: var(--on-accent);
+  border-color: var(--selected-border);
+  border-width: 2px;
+}
+
+.btn--primary:hover {
+  background-color: var(--tb-purple-lt);
+  border-color: var(--tb-purple-lt);
+}
+
+.btn--secondary {
+  background-color: transparent;
+  color: var(--text);
+  border-color: var(--border-control);
+}
+
+.btn--secondary:hover {
+  background-color: var(--raised);
+  border-color: var(--border-control-hover);
+}
+
+/* Destructive. Magenta is reserved for this and for the wordmark. The fill is
+   a darkened magenta so white label text clears 4.5:1 (5.77:1); the raw
+   --tb-magenta family supplies the boundary on the dark theme, where the fill
+   alone would fall to 2.74:1 against a raised surface. */
+.btn--danger {
+  background-color: var(--danger-fill);
+  color: var(--on-accent);
+  border-color: var(--danger-border);
+  border-width: 2px;
+}
+
+.btn--danger:hover {
+  background-color: var(--tb-magenta);
+  border-color: var(--tb-magenta);
+}
+
+/* 32px tall, still comfortably over the 24px WCAG 2.5.8 floor. Reserved for
+   secondary actions inside table rows and cards, never for a submit. */
+.btn--small {
+  min-block-size: 32px;
+  min-inline-size: 32px;
+  padding-inline: var(--space-3);
+  font-size: var(--fs-300);
+}
+
+.btn--block {
+  inline-size: 100%;
+}
+
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  background-color: var(--disabled-bg);
+  color: var(--disabled-text);
+  border-color: var(--border);
+  border-style: dashed;
+  cursor: not-allowed;
+}
+
+/* A quiet link-shaped button for "cancel" style actions. */
+.btn--quiet {
+  background-color: transparent;
+  border-color: transparent;
+  color: var(--muted);
+  padding-inline: var(--space-3);
+  text-decoration: underline;
+}
+
+.btn--quiet:hover {
+  color: var(--text);
+  background-color: var(--raised);
+}
+
+
+/* ==========================================================================
+   9. DATA DISPLAY
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Card.
+   -------------------------------------------------------------------------- */
+
+.card {
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-3);
+  overflow: hidden;
+}
+
+.card__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--raised);
+  border-block-end: 1px solid var(--border);
+}
+
+.card__title {
+  margin: 0;
+  font-size: var(--fs-500);
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.card__title a {
+  text-decoration: none;
+}
+
+.card__title a:hover {
+  text-decoration: underline;
+}
+
+/* Pushes trailing header content (a badge, a score) to the far edge. */
+.card__header > .badge,
+.card__header > .score-badge,
+.card__header > .card__aside {
+  margin-inline-start: auto;
+}
+
+.card__body {
+  padding: var(--space-4);
+  display: grid;
+  gap: var(--space-3);
+}
+
+.card__footer {
+  padding: var(--space-3) var(--space-4);
+  border-block-start: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+/* --------------------------------------------------------------------------
+   Badge. A neutral pill for a rubric name, a status, a count.
+   -------------------------------------------------------------------------- */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0.15em 0.6em;
+  background-color: var(--raised);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-pill);
+  color: var(--text);
+  font-size: var(--fs-200);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.badge--accent {
+  border-color: var(--selected-border);
+  color: var(--info-text);
+}
+
+/* --------------------------------------------------------------------------
+   Score badge.
+
+   The tier is spelled out in words inside the badge, and the numeral is always
+   present, so the tier survives greyscale, colour blindness and forced-colours
+   mode. The border weight also steps up by tier. Colour is the last signal.
+
+   Tiers use teal (strong), purple (mid) and plain grey (weak). Yellow is not
+   used here: it is reserved for warnings. Magenta is not used here: it is
+   reserved for the wordmark and destructive actions.
+   -------------------------------------------------------------------------- */
+
+.score-badge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  background-color: var(--raised);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-2);
+  white-space: nowrap;
+}
+
+.score-badge__value {
+  font-size: var(--fs-500);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.score-badge__tier {
+  font-size: var(--fs-200);
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.score-badge--strong {
+  border-color: var(--success-border);
+  border-width: 3px;
+}
+
+.score-badge--strong .score-badge__value,
+.score-badge--strong .score-badge__tier {
+  color: var(--success-text);
+}
+
+.score-badge--mid {
+  border-color: var(--selected-border);
+  border-width: 2px;
+}
+
+.score-badge--mid .score-badge__value,
+.score-badge--mid .score-badge__tier {
+  color: var(--info-text);
+}
+
+.score-badge--weak {
+  border-color: var(--border-strong);
+  border-style: dashed;
+  border-width: 1px;
+}
+
+.score-badge--weak .score-badge__value {
+  color: var(--text);
+}
+
+/* --------------------------------------------------------------------------
+   Stat grid. One column on a phone, then two, then auto-fit.
+   -------------------------------------------------------------------------- */
+
+.stat-grid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: 1fr;
+}
+
+.stat-card {
+  padding: var(--space-4);
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-3);
+  /* A hairline of brand at the top edge. Decorative, and the only place the
+     dashboard borrows the stripe idea. */
+  border-block-start: 3px solid var(--selected-border);
+  display: grid;
+  gap: var(--space-1);
+}
+
+.stat-card__value {
+  font-size: var(--fs-800);
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.stat-card__label {
+  color: var(--muted);
+  font-size: var(--fs-300);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.stat-card__detail {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-300);
+}
+
+/* --------------------------------------------------------------------------
+   Meta list. A <dl> of label/value pairs, each pair wrapped in a div.
+   -------------------------------------------------------------------------- */
+
+.meta-list {
+  margin: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.meta-list__row {
+  display: grid;
+  /* Stacked on a phone, two columns from tablet up (see MEDIA QUERIES). */
+  gap: 0;
+  padding-block-end: var(--space-2);
+  border-block-end: 1px solid var(--border);
+}
+
+.meta-list__row:last-child {
+  border-block-end: 0;
+  padding-block-end: 0;
+}
+
+.meta-list__label {
+  color: var(--muted);
+  font-size: var(--fs-300);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.meta-list__value {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* --------------------------------------------------------------------------
+   Photo thumb.
+   -------------------------------------------------------------------------- */
+
+.photo-thumb {
+  display: block;
+  inline-size: 100%;
+  max-inline-size: 14rem;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background-color: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2);
+}
+
+.photo-thumb--small {
+  max-inline-size: 5rem;
+  aspect-ratio: 1;
+}
+
+/* When the thumb is wrapped in a link, the link is the focus target. */
+.photo-thumb-link {
+  display: inline-block;
+  border-radius: var(--radius-2);
+}
+
+/* --------------------------------------------------------------------------
+   Pagination.
+   -------------------------------------------------------------------------- */
+
+.pagination {
+  margin-block-start: var(--space-5);
+}
+
+.pagination__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pagination__link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 44px;
+  min-block-size: 44px;
+  padding-inline: var(--space-2);
+  background-color: var(--surface);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-2);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.pagination__link:hover {
+  border-color: var(--border-control-hover);
+  background-color: var(--raised);
+}
+
+/* Current page: purple fill, a heavier border and bold weight together. Also
+   marked with aria-current="page" in the markup, which is what actually
+   conveys the state to assistive tech. */
+.pagination__link[aria-current="page"] {
+  background-color: var(--selected-fill);
+  color: var(--on-accent);
+  border-color: var(--selected-border);
+  border-width: 2px;
+  font-weight: 800;
+}
+
+/* A disabled prev/next is rendered as a <span>, not a link, so it is not a
+   dead focus stop. */
+.pagination__ellipsis,
+.pagination__link--disabled {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 44px;
+  min-block-size: 44px;
+  color: var(--disabled-text);
+}
+
+/* --------------------------------------------------------------------------
+   Data table.
+
+   Mobile first, so the BASE styles are the stacked-card presentation and the
+   real table layout is restored at tablet width in the MEDIA QUERIES section.
+
+   Changing `display` on table elements drops native table semantics in
+   Chromium and WebKit, so the markup contract requires explicit ARIA roles
+   (role="table", "rowgroup", "row", "columnheader", "cell"). They are inert
+   when the real table layout is active and load-bearing when it is not.
+
+   Every <td> must carry data-label="<its column header>". The stacked view
+   renders that attribute as the row label; without it a cell has no heading.
+   -------------------------------------------------------------------------- */
+
+.data-table {
+  inline-size: 100%;
+  border-collapse: collapse;
+}
+
+.data-table__caption {
+  caption-side: top;
+  text-align: start;
+  padding-block-end: var(--space-3);
+  color: var(--muted);
+  font-size: var(--fs-300);
+}
+
+.data-table thead {
+  /* Hidden, not removed: the column names come back as td::before content in
+     the stacked view, and the header row is restored at tablet width. */
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.data-table tbody {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.data-table tr {
+  display: block;
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-3);
+}
+
+.data-table td {
+  display: grid;
+  grid-template-columns: minmax(6rem, 38%) 1fr;
+  gap: var(--space-3);
+  align-items: baseline;
+  padding-block: var(--space-2);
+  border-block-end: 1px solid var(--border);
+}
+
+.data-table tr td:last-child {
+  border-block-end: 0;
+  padding-block-end: 0;
+}
+
+.data-table td::before {
+  content: attr(data-label);
+  color: var(--muted);
+  font-size: var(--fs-300);
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+/* A cell holding only buttons or links spans the full row width instead of
+   sitting in the value column. */
+.data-table td[data-label=""]::before {
+  display: none;
+}
+
+.data-table__num {
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+
+/* ==========================================================================
+   10. UTILITIES
+   ========================================================================== */
+
+/* The clip-path technique. Not display:none and not visibility:hidden, either
+   of which would remove the element from the accessibility tree. This is a
+   positioning utility, so it must be the only positioning class on the element
+   (nothing in this file uses !important, so a later component rule would win).
+   Keep it late in the cascade for that reason. */
+.visually-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The "skip link" pattern: hidden until focused. Use on any element that must
+   appear only when it takes focus. */
+.visually-hidden--focusable:focus-within,
+.visually-hidden--focusable:focus-visible {
+  position: static;
+  inline-size: auto;
+  block-size: auto;
+  margin: 0;
+  overflow: visible;
+  clip-path: none;
+  white-space: normal;
+}
+
+.text-muted {
+  color: var(--muted);
+}
+
+/* Tabular numerals so prices and scores line up in a column and do not jitter
+   as a live value changes. */
+.text-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Tabular numerals without switching to the mono face. */
+.text-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.text-small {
+  font-size: var(--fs-300);
+}
+
+/* Vertical rhythm applied only between siblings, so the block adds no outer
+   margin. Override the step per instance with --stack-space. */
+.stack > * + * {
+  margin-block-start: var(--stack-space, var(--space-4));
+}
+
+.stack--tight {
+  --stack-space: var(--space-2);
+}
+
+.stack--loose {
+  --stack-space: var(--space-6);
+}
+
+/* Horizontal group that wraps. Override the gap with --cluster-space and the
+   alignment with --cluster-align. */
+.cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: var(--cluster-align, center);
+  gap: var(--cluster-space, var(--space-3));
+}
+
+.cluster--between {
+  justify-content: space-between;
+}
+
+.cluster--end {
+  justify-content: flex-end;
+}
+
+
+/* ==========================================================================
+   11. MEDIA QUERIES
+   Everything above is the 360px phone layout. These layer up from there.
+   ========================================================================== */
+
+/* --- 30em / 480px: roomier phones and small tablets in portrait. --- */
+@media (min-width: 30em) {
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .scale__options {
+    gap: var(--space-1);
+  }
+
+  .scale__option--half .scale__label {
+    font-size: var(--fs-300);
+  }
+}
+
+/* --- 48em / 768px: tablet and up. The form gains its boxes back, the table
+       becomes a real table, and the sticky action bar stops being sticky
+       because the whole form fits without it. --- */
+@media (min-width: 48em) {
+  .page {
+    padding-inline: var(--space-5);
+    padding-block: var(--space-6) var(--space-7);
+  }
+
+  /* The full fieldset box, now that horizontal room is not scarce. */
+  .form-section {
+    padding: var(--space-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-3);
+    background-color: var(--surface);
+  }
+
+  .form-section:first-of-type {
+    border: 1px solid var(--border);
+    padding-block-start: var(--space-5);
+  }
+
+  /* A legend inside a bordered fieldset sits in the border gap by default,
+     which looks like a 1990s dialog box. Float it out to normal flow instead so
+     the section reads as a card with a heading. */
+  .form-section__legend {
+    float: left;
+    inline-size: 100%;
+    margin-block-end: var(--space-2);
+  }
+
+  .form-section__legend + .form-section__blurb {
+    margin-block-start: 0;
+  }
+
+  /* Contained fields sit on the surface, so their own fill steps up to raised
+     to stay distinguishable from the section behind them. */
+  .form-section :where(input, select, textarea),
+  .form-section .input-group {
+    background-color: var(--raised);
+  }
+
+  /* The prefix would otherwise match the raised field beside it, leaving only
+     its 1px divider to separate them. Step it back to the surface. */
+  .form-section .input-prefix {
+    background-color: var(--surface);
+  }
+
+  .form-actions--sticky {
+    position: static;
+    margin-inline: 0;
+    padding-inline: 0;
+    padding-block-end: var(--space-3);
+    background-color: transparent;
+  }
+
+  .field__label {
+    font-size: var(--fs-500);
+  }
+
+  .meta-list__row {
+    grid-template-columns: minmax(8rem, 30%) 1fr;
+    gap: var(--space-3);
+    align-items: baseline;
+  }
+
+  /* --- The real table returns. --- */
+  .data-table thead {
+    position: static;
+    inline-size: auto;
+    block-size: auto;
+    margin: 0;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+  }
+
+  .data-table tbody {
+    display: table-row-group;
+    gap: 0;
+  }
+
+  .data-table thead tr {
+    background-color: transparent;
+  }
+
+  .data-table tr {
+    display: table-row;
+    padding: 0;
+    background-color: transparent;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .data-table tbody tr {
+    border-block-end: 1px solid var(--border);
+  }
+
+  .data-table tbody tr:hover {
+    background-color: var(--raised);
+  }
+
+  .data-table th {
+    padding: var(--space-2) var(--space-3);
+    text-align: start;
+    vertical-align: bottom;
+    border-block-end: 2px solid var(--border-strong);
+    color: var(--muted);
+    font-size: var(--fs-300);
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .data-table td {
+    display: table-cell;
+    padding: var(--space-3);
+    border-block-end: 0;
+    vertical-align: baseline;
+  }
+
+  .data-table tr td:last-child {
+    padding-block-end: var(--space-3);
+  }
+
+  /* The data-label is redundant once the real header row is visible. */
+  .data-table td::before {
+    display: none;
+  }
+
+  .data-table__num {
+    text-align: end;
+  }
+
+  .data-table th.data-table__num {
+    text-align: end;
+  }
+}
+
+/* --- 64em / 1024px: desktop. --- */
+@media (min-width: 64em) {
+  .stat-grid {
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  }
+
+  .site-header {
+    padding-inline: var(--space-5);
+  }
+
+  .wordmark {
+    font-size: var(--fs-600);
+  }
+
+  /* Actions align to the end of a wide column rather than stretching. */
+  .form-actions {
+    justify-content: flex-start;
+  }
+
+  /* A block button is a mobile affordance; at desktop width it becomes a
+     600px-wide slab, so it reverts to intrinsic width. */
+  .btn--block {
+    inline-size: auto;
+    min-inline-size: 12rem;
+  }
+}
+
+/* --- Forced colours (Windows high contrast). Keep the shape signals, let the
+       OS own every colour. --- */
+@media (forced-colors: active) {
+  .scale__input:checked + .scale__label {
+    border-color: Highlight;
+    border-width: 3px;
+  }
+
+  .scale__label::after {
+    border-color: currentColor;
+  }
+
+  .progress-meter__bar {
+    background-color: Highlight;
+    background-image: none;
+  }
+
+  .top-stripe {
+    background-image: none;
+    background-color: Highlight;
+  }
+}
+
+
+/* ==========================================================================
+   12. PRINT
+   A submitted survey on one sheet. Chrome, controls and decoration all drop
+   out; the answers stay. Tokens are remapped to ink on paper rather than
+   restyling every component again.
+   ========================================================================== */
+
+@media print {
+  :root {
+    --page: #FFFFFF;
+    --surface: #FFFFFF;
+    --raised: #FFFFFF;
+    --border: #999999;
+    --border-strong: #666666;
+    --border-control: #666666;
+    --text: #000000;
+    --muted: #333333;
+    --selected-fill: #FFFFFF;
+    --selected-border: #000000;
+    --selected-text: #000000;
+    --on-accent: #000000;
+    --motion-fast: 0s;
+    --motion-base: 0s;
+    color-scheme: light;
+  }
+
+  @page {
+    margin: 12mm;
+  }
+
+  body {
+    padding-block-start: 0;
+    background: #FFFFFF;
+    color: #000000;
+    font-size: 10.5pt;
+    line-height: 1.4;
+  }
+
+  /* Chrome and interactive affordances have no meaning on paper. */
+  .top-stripe,
+  .skip-link,
+  .site-nav,
+  .theme-toggle,
+  .form-actions,
+  .pagination,
+  .progress-meter,
+  .site-footer,
+  .photo-field__input,
+  .scale__anchors,
+  .empty-state__actions,
+  .data-table__actions,
+  .btn {
+    display: none;
+  }
+
+  .site-header {
+    padding: 0 0 4pt;
+    border-block-end: 1pt solid #000000;
+    margin-block-end: 8pt;
+  }
+
+  .wordmark,
+  .wordmark__analyzer,
+  .wordmark__taco {
+    color: #000000;
+    font-size: 12pt;
+  }
+
+  .page,
+  .page--wide {
+    max-inline-size: none;
+    padding: 0;
+  }
+
+  /* Tighten the vertical rhythm hard: this is the difference between one sheet
+     and two. */
+  .form,
+  .stack > * + * {
+    gap: 8pt;
+  }
+
+  .stack > * + * {
+    margin-block-start: 6pt;
+  }
+
+  .form-section {
+    padding: 0;
+    border: 0;
+    border-block-start: 0.5pt solid #666666;
+    padding-block-start: 6pt;
+    gap: 6pt;
+    break-inside: avoid;
+    background: none;
+  }
+
+  .form-section__legend {
+    float: none;
+    font-size: 11pt;
+    margin-block-end: 3pt;
+  }
+
+  .form-section__blurb,
+  .field__hint,
+  .scale__ends {
+    /* Guidance for the person filling the form in, noise on the record of what
+       they answered. */
+    display: none;
+  }
+
+  .field,
+  .scale,
+  .card,
+  .stat-card,
+  .data-table tr,
+  .meta-list__row {
+    break-inside: avoid;
+  }
+
+  .scale {
+    gap: 3pt;
+  }
+
+  /* Nine chips at print width would waste half a page. Only the chosen one is
+     printed, rendered as a plain value. */
+  .scale__option {
+    display: none;
+  }
+
+  .scale__option:has(.scale__input:checked) {
+    display: block;
+  }
+
+  .scale__options {
+    display: block;
+  }
+
+  .scale__input:checked + .scale__label {
+    display: inline-flex;
+    flex-direction: row;
+    gap: 4pt;
+    min-block-size: 0;
+    padding: 1pt 5pt;
+    border: 1pt solid #000000;
+    border-radius: 2pt;
+    background: none;
+    color: #000000;
+    font-size: 11pt;
+    font-weight: 700;
+  }
+
+  /* A scale left blank still has to be visible on the printed record. */
+  .scale__options:not(:has(.scale__input:checked))::after {
+    content: "(not answered)";
+    font-style: italic;
+    color: #333333;
+  }
+
+  :where(input, select, textarea) {
+    background: none;
+    border: 0.5pt solid #666666;
+    min-block-size: 0;
+    padding: 1pt 3pt;
+    font-size: 10.5pt;
+  }
+
+  .input-group {
+    border: 0.5pt solid #666666;
+  }
+
+  .flash,
+  .error-summary,
+  .card,
+  .stat-card,
+  .badge,
+  .score-badge {
+    border: 0.5pt solid #666666;
+    box-shadow: none;
+  }
+
+  .stat-card {
+    border-block-start: 0.5pt solid #666666;
+  }
+
+  .stat-card__value {
+    font-size: 16pt;
+  }
+
+  .card__header {
+    background: none;
+  }
+
+  .data-table thead {
+    position: static;
+    inline-size: auto;
+    block-size: auto;
+    margin: 0;
+    overflow: visible;
+    clip-path: none;
+    display: table-header-group;
+  }
+
+  .data-table tbody {
+    display: table-row-group;
+  }
+
+  .data-table tr {
+    display: table-row;
+    border-block-end: 0.5pt solid #999999;
+    padding: 0;
+  }
+
+  .data-table td {
+    display: table-cell;
+    padding: 2pt 4pt;
+  }
+
+  .data-table td::before {
+    display: none;
+  }
+
+  .photo-thumb,
+  .photo-field__image {
+    max-inline-size: 40mm;
+  }
+
+  /* Print the destination of a link nobody can click. */
+  a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 8pt;
+    color: #333333;
+  }
+}

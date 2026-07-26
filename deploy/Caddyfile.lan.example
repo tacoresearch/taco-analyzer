@@ -1,0 +1,76 @@
+# Caddyfile for a LAN deployment of Taco Analyzer, using Caddy's own internal CA.
+# taco-analyzer-managed: this marker tells deploy/uninstall.sh the file is ours.
+#
+# deploy/install.sh copies this file to /etc/caddy/Caddyfile and substitutes:
+#   __HOSTNAME__  the name you passed to --hostname (for example taco.lan)
+#   __PORT__      the app's local port (default 8787)
+# If you edit /etc/caddy/Caddyfile by hand, replace those tokens yourself.
+#
+# WHEN YOU NEED "tls internal"
+#   Caddy already uses its internal CA automatically for "localhost", for bare
+#   IP addresses, and for names ending in .local, .internal and .home.arpa.
+#   For any other private name (taco.lan, taco.corp, and so on) it would try
+#   Let's Encrypt and fail, so "tls internal" below is what forces the local CA.
+#   Leaving it in place is harmless even for the automatic cases.
+#
+# CLIENTS WILL SHOW A CERTIFICATE WARNING UNTIL YOU INSTALL THE ROOT CA.
+#   Root CA certificate:
+#     /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt
+#   See DEPLOY.md, "Install the LAN root CA", for per-device instructions.
+
+{
+	# The caddy service user cannot write the system trust store, and inside a
+	# container it should not try. Without this, Caddy logs a scary but harmless
+	# "failed to install root certificate" error on every start.
+	skip_install_trust
+
+	pki {
+		ca local {
+			# Cosmetic: this is the name devices will show in their trust store
+			# once you install the root certificate. Changing it later means
+			# regenerating the CA, which means reinstalling it on every device.
+			name "Taco Analyzer Local CA"
+		}
+	}
+
+	# Do not advertise the server version in responses.
+	servers {
+		protocols h1 h2 h3
+	}
+}
+
+__HOSTNAME__ {
+	tls internal
+
+	encode zstd gzip
+
+	# Cap the request body at the proxy as well as in the app. The app's own
+	# MAX_UPLOAD_BYTES is 10 MiB by default; this is deliberately a little
+	# higher so that multipart framing overhead does not cause Caddy to reject
+	# an upload that the app would have accepted with a friendly error.
+	request_body {
+		max_size 12MB
+	}
+
+	reverse_proxy 127.0.0.1:__PORT__ {
+		# IMPORTANT: this OVERWRITES X-Forwarded-For instead of appending to it.
+		# Caddy's default is to append, which means a client could send its own
+		# X-Forwarded-For and have the app (running with TRUST_PROXY=1) believe
+		# a forged source address, defeating per-IP login throttling.
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Forwarded-Host {host}
+
+		# Fail fast rather than hanging if the app is restarting.
+		transport http {
+			dial_timeout 5s
+		}
+	}
+
+	log {
+		output file /var/log/caddy/taco-analyzer.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+	}
+}

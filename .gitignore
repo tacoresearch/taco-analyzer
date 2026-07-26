@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Runtime data: the SQLite database, its WAL sidecars, and uploaded photos.
+# Nothing under data/ belongs in git.
+data/
+
+# Secrets. .env holds the session secret and is generated per install.
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS and editor cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Test and coverage output
+coverage/
+.nyc_output/
