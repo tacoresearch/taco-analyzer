@@ -574,6 +574,173 @@
   };
 
   /* ======================================================================
+     Show-password toggles
+
+     NIST asks verifiers to offer a reveal option, because silently mistyping a
+     long passphrase twice is a worse outcome than briefly showing it.
+     ====================================================================== */
+
+  const initPasswordToggles = () => {
+    const toggles = all(document, '[data-password-toggle]');
+    if (toggles.length === 0) return;
+
+    /** @param {HTMLElement} button */
+    const sync = (button) => {
+      const input = document.getElementById(
+        button.getAttribute('data-password-toggle') ?? '',
+      );
+      if (!(input instanceof HTMLInputElement)) return;
+
+      const revealed = input.type === 'text';
+      button.setAttribute('aria-pressed', revealed ? 'true' : 'false');
+      // The label states the ACTION, while aria-pressed states the STATE.
+      // Screen reader users get both without the two contradicting each other.
+      button.textContent = revealed ? 'Hide password' : 'Show password';
+    };
+
+    for (const button of toggles) sync(/** @type {HTMLElement} */ (button));
+
+    document.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const button = target.closest('[data-password-toggle]');
+      if (!button) return;
+
+      const input = document.getElementById(
+        button.getAttribute('data-password-toggle') ?? '',
+      );
+      if (!(input instanceof HTMLInputElement)) return;
+
+      // Preserve the caret so revealing mid-typing does not send the cursor to
+      // the end of a half-entered passphrase.
+      const start = input.selectionStart;
+      const end = input.selectionEnd;
+      input.type = input.type === 'password' ? 'text' : 'password';
+      try {
+        if (start !== null && end !== null) input.setSelectionRange(start, end);
+      } catch {
+        // setSelectionRange throws on some input types; not worth failing over.
+      }
+      input.focus();
+      sync(/** @type {HTMLElement} */ (button));
+    });
+
+    // Never leave a password visible on a page that is being left or hidden.
+    const concealAll = () => {
+      for (const button of toggles) {
+        const input = document.getElementById(
+          button.getAttribute('data-password-toggle') ?? '',
+        );
+        if (input instanceof HTMLInputElement && input.type === 'text') {
+          input.type = 'password';
+          sync(/** @type {HTMLElement} */ (button));
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') concealAll();
+    });
+    for (const form of all(document, 'form')) {
+      form.addEventListener('submit', concealAll);
+    }
+  };
+
+  /* ======================================================================
+     Live rubric anchor text
+
+     The rubric documents what specific levels mean (1, 3 and 5 for the taste
+     metrics; all five for the observer variables). Hiding that behind a
+     disclosure means nobody reads it, which defeats the point of an anchored
+     rubric: the anchors are what make scores repeatable between visits.
+
+     So once JavaScript is available, the disclosure is replaced by the meaning
+     of whatever level is currently selected. With JavaScript blocked the
+     <details> stays exactly as the server rendered it.
+     ====================================================================== */
+
+  const initScaleMeanings = () => {
+    const scales = all(document, '.scale[data-anchors]');
+    if (scales.length === 0) return;
+
+    for (const scale of scales) {
+      /** @type {Record<string, string>} */
+      let anchors;
+      try {
+        anchors = JSON.parse(scale.getAttribute('data-anchors') ?? '{}');
+      } catch {
+        continue; // Leave the <details> fallback in place for this one.
+      }
+
+      const levels = Object.keys(anchors)
+        .map(Number)
+        .filter((level) => Number.isFinite(level))
+        .sort((a, b) => a - b);
+      if (levels.length === 0) continue;
+
+      const meaning = scale.querySelector('[data-scale-meaning]');
+      const details = scale.querySelector('.scale__anchors');
+      if (!(meaning instanceof HTMLElement)) continue;
+
+      // Only now is the disclosure redundant, so only now is it removed.
+      if (details instanceof HTMLElement) details.hidden = true;
+      meaning.hidden = false;
+
+      /** @param {number} value */
+      const describe = (value) => {
+        const exact = anchors[String(value)];
+        if (exact) {
+          return { level: String(value), text: exact, between: false };
+        }
+        // Undocumented levels are the norm on a 1 to 5 scale anchored only at
+        // 1, 3 and 5, and half steps make it more so. Naming the two anchors it
+        // sits between is what the rubric itself tells the scorer to do.
+        const below = [...levels].reverse().find((l) => l < value);
+        const above = levels.find((l) => l > value);
+        if (below !== undefined && above !== undefined) {
+          return {
+            level: String(value),
+            text: `Between ${below} (${anchors[String(below)]}) and ${above} (${anchors[String(above)]})`,
+            between: true,
+          };
+        }
+        return null;
+      };
+
+      const render = () => {
+        const checked = scale.querySelector('.scale__input:checked');
+        if (!(checked instanceof HTMLInputElement)) {
+          meaning.textContent = 'Choose a rating to see what it means.';
+          meaning.classList.add('scale__meaning--empty');
+          return;
+        }
+        const described = describe(Number(checked.value));
+        if (!described) {
+          meaning.textContent = '';
+          meaning.classList.add('scale__meaning--empty');
+          return;
+        }
+        meaning.classList.remove('scale__meaning--empty');
+        meaning.textContent = '';
+
+        const number = document.createElement('span');
+        number.className = 'scale__meaning-level';
+        number.textContent = described.level;
+
+        const text = document.createElement('span');
+        text.className = 'scale__meaning-text';
+        text.textContent = described.text;
+
+        // Built as nodes rather than innerHTML: the anchor strings come from the
+        // rubric, but building DOM keeps this immune to that ever changing.
+        meaning.append(number, text);
+      };
+
+      scale.addEventListener('change', render);
+      render();
+    }
+  };
+
+  /* ======================================================================
      Boot
      ====================================================================== */
 
@@ -582,6 +749,8 @@
     feature('photo field', initPhotoFields);
     feature('progress meter', initProgressMeters);
     feature('error summary', initErrorSummary);
+    feature('password toggles', initPasswordToggles);
+    feature('scale meanings', initScaleMeanings);
   };
 
   // `defer` guarantees the document is parsed, but the readyState check keeps

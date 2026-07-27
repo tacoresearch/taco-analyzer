@@ -9,14 +9,54 @@ The whole install is: clone the repo, run one script.
 
 ## Quick start
 
-### LAN demo (private hostname, no public DNS)
+### Before you start: pick a hostname you can actually resolve
+
+**This is the step most likely to waste your afternoon.** The installer does not
+create DNS. Whatever you pass to `--hostname` has to resolve to this machine on
+your network, and it has to match, or browsers will refuse the certificate.
+
+Pick the hostname first, using whichever of these you can actually do:
+
+| If you have | Use something like | Notes |
+|---|---|---|
+| A local DNS server or router that accepts custom records | `taco.yourdomain.lan` | Best option. One record, every device works. |
+| A real domain you own | `taco.internal.example.org` | Point an A record at the LAN IP. Works even without public exposure. |
+| Neither | the machine's IP, e.g. `--hostname 10.10.10.216` | No DNS needed at all. Caddy issues an internal certificate for the IP. |
+
+**Avoid `.lan` unless you control DNS for it.** It is not a real TLD, nothing
+resolves it by default, and a browser will treat `taco.lan` as a search query
+rather than an address until a DNS record exists. Editing a hosts file is a
+workaround for laptops but **not for Android phones**, which have no editable
+hosts file without root, and phones are the main client for this app.
+
+Hostnames ending in `.internal`, `.home.arpa`, or a bare IP get Caddy's internal
+certificate automatically. You still need the name to resolve.
+
+### LAN demo
+
+Run these **as root**. Get a root shell first rather than prefixing each line
+with `sudo`: several of these are compound commands, and `sudo cd` does not work
+at all, because `cd` is a shell builtin rather than a program.
+
+```bash
+sudo -i
+```
+
+Then:
 
 ```bash
 apt-get update && apt-get install -y git
 git clone https://github.com/tacoresearch/taco-analyzer.git /opt/taco-analyzer
 cd /opt/taco-analyzer
-bash deploy/install.sh --lan --hostname taco.lan
+bash deploy/install.sh --lan --hostname taco.example.lan --email you@example.org
 ```
+
+Pass `--email`, or no administrator account is created and nobody can sign in.
+
+**Note that after installation you can no longer `cd /opt/taco-analyzer` as a
+normal user.** The installer sets the code to `0750 root:tacoapp` so the service
+account cannot modify its own code and other users cannot read it. Use `sudo -i`
+first, or use `deploy/taco-cli.sh` for routine tasks, which handles this for you.
 
 Then read [Installing the LAN root certificate](#installing-the-lan-root-certificate),
 because until you do, every browser will show a certificate warning.
@@ -225,8 +265,7 @@ curl -s http://127.0.0.1:8787/healthz   # liveness
 ### Updating
 
 ```bash
-cd /opt/taco-analyzer
-sudo bash deploy/update.sh
+sudo /opt/taco-analyzer/deploy/update.sh
 ```
 
 Takes a backup, pulls, reinstalls dependencies, syntax-checks, stops the service,
@@ -286,8 +325,7 @@ sudo bash deploy/uninstall.sh --purge    # deletes the database and photos
 ## Moving from LAN to a public hostname
 
 ```bash
-cd /opt/taco-analyzer
-sudo bash deploy/install.sh --public --hostname analyzer.tacoresearch.org --email you@example.org
+sudo /opt/taco-analyzer/deploy/install.sh --public --hostname analyzer.tacoresearch.org --email you@example.org
 ```
 
 **Everyone will have to sign in again, and that is intentional.** Over HTTPS the

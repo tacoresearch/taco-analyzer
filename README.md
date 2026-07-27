@@ -28,10 +28,15 @@ and a dashboard tracks what has been gathered.
 See **[DEPLOY.md](DEPLOY.md)**. The short version, on a fresh Debian 13 container:
 
 ```bash
+sudo -i
 git clone <this repo> /opt/taco-analyzer
 cd /opt/taco-analyzer
-bash deploy/install.sh --lan --hostname taco.lan
+bash deploy/install.sh --lan --hostname taco.example.lan --email you@example.org
 ```
+
+Pick a hostname that actually resolves on your network first; the installer does
+not create DNS records, and a name nothing resolves will just look broken. A bare
+IP works too. See [DEPLOY.md](DEPLOY.md).
 
 That installs Node, dependencies, the database, a hardened systemd service, and
 TLS, then prints a one-time password for the first admin account.

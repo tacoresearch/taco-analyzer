@@ -208,7 +208,13 @@ export function changePasswordPage({
       ${
         mustChange
           ? html`
-      <form class="cluster" method="post" action="/logout">
+      <!--
+        Separated from the save button on purpose. These two actions sit next to
+        each other but mean opposite things: one finishes setting the account up,
+        the other abandons it. Adjacent controls with opposite consequences are
+        how people click the wrong one, especially one-handed on a phone.
+      -->
+      <form class="form-escape" method="post" action="/logout">
         ${csrfField(csrfToken)}
         <button type="submit" class="btn btn--secondary btn--small">Sign out instead</button>
       </form>`

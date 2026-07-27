@@ -362,9 +362,22 @@ function scaleFieldset({ section, metric, name, value = '', error = null, errorL
               'scale',
               levels.length === 5 && 'scale--five',
               error && 'is-invalid',
-            )}" id="${id}"${attrs({ 'aria-describedby': errorId || false })}>
+            )}" id="${id}"${attrs({
+              'aria-describedby': errorId || false,
+              // The anchor text, for app.js to show live as the user chooses a
+              // level. Serialized here rather than fetched so it works offline
+              // and needs no second request. attrs() escapes the quotes.
+              'data-anchors': JSON.stringify(metric.anchors ?? {}),
+            })}>
               <legend class="scale__legend">${metric.label}</legend>
               ${scaleAnchors(metric)}
+              <!--
+                Filled by app.js with the description of whatever level is
+                selected. Starts hidden and empty: with JavaScript blocked the
+                <details> above remains the way to read the anchors, so nothing
+                here is load-bearing.
+              -->
+              <p class="scale__meaning" data-scale-meaning hidden aria-live="polite"></p>
               <div class="scale__options">
                 ${levels.map((level) => {
                   // The dot in "4.5" is legal in an id but awkward in a selector

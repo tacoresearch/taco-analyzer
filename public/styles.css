@@ -56,6 +56,9 @@
   --tb-magenta: #E5177E;
   --tb-teal: #00B3B8;
   --tb-teal-lt: #2ED9C3;
+  /* Baja Blast cyan, for the wordmark. Bluer than --tb-teal, which is
+     the point: it is the one place the palette gets to be loud. */
+  --tb-baja: #3FD8E8;
   --tb-yellow: #FFC72C;
 
   /* --- Dark greys. Dark is the default theme. --- */
@@ -83,6 +86,7 @@
   --accent-purple-text: #C08FE0;
   --accent-magenta-text: #FF4D9D;
   --accent-teal-text: #2ED9C3;
+  --accent-baja-text: #3FD8E8;
   --accent-yellow-text: #FFC72C;
 
   /* --- Semantic roles. --- */
@@ -199,6 +203,7 @@
     --accent-purple-text: #6E2A8C;
     --accent-magenta-text: #AE0F5E;
     --accent-teal-text: #00767A;
+    --accent-baja-text: #00707E;
     --accent-yellow-text: #7A5300;
 
     --focus-ring: var(--tb-purple);
@@ -243,6 +248,7 @@
   --accent-purple-text: #6E2A8C;
   --accent-magenta-text: #AE0F5E;
   --accent-teal-text: #00767A;
+  --accent-baja-text: #00707E;
   --accent-yellow-text: #7A5300;
 
   --focus-ring: var(--tb-purple);
@@ -523,11 +529,16 @@ h4 { font-size: var(--fs-400); }
   color: var(--text);
 }
 
-/* The single magenta word. Magenta is reserved for exactly this and for
-   destructive actions. Uses the per-theme tint, which clears 4.5:1 even
-   though a mark this large would only need 3:1. */
+/* The single loud word, in Baja Blast cyan. Uses the per-theme tint rather than
+   the raw brand hex: #3FD8E8 measures 10.97:1 on the dark page and the light
+   variant #00707E measures 5.53:1 on the light page, so it clears 4.5:1 in both
+   even though a mark this large would only need 3:1.
+
+   Moving it off magenta also frees magenta to mean exactly one thing, which is
+   destructive actions. An accent that is both decorative and semantic teaches
+   people to ignore it. */
 .wordmark__analyzer {
-  color: var(--accent-magenta-text);
+  color: var(--accent-baja-text);
 }
 
 .site-nav {
@@ -1437,12 +1448,68 @@ h4 { font-size: var(--fs-400); }
 }
 
 /* --------------------------------------------------------------------------
-   Anchors. Collapsed by default so the form stays scannable; the rubric text
-   is long and only needed when a score is genuinely borderline.
+   Anchors.
+
+   Two presentations of the same rubric text:
+
+   - `.scale__anchors` is a collapsed <details>, the no-JavaScript fallback.
+   - `.scale__meaning` is what app.js shows instead once it can: the meaning of
+     the level actually selected, in place, with no interaction needed. Hiding
+     anchored descriptions behind a disclosure means nobody reads them, and
+     unread anchors are the whole difference between a repeatable rubric and a
+     mood ring.
    -------------------------------------------------------------------------- */
 
 .scale__anchors {
   font-size: var(--fs-300);
+}
+
+/* An escape hatch offered below a form, deliberately set apart from it.
+
+   The gap is not decoration. A "sign out instead" control rendered close under
+   a primary submit reads as part of the same control group, and a thumb aiming
+   for one can land on the other. The rule above it says "this is a different
+   decision", and the smaller, secondary styling says "and not the expected one". */
+.form-escape {
+  display: flex;
+  margin-block-start: var(--space-6);
+  padding-block-start: var(--space-4);
+  border-block-start: 1px solid var(--border);
+}
+
+.scale__meaning {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  /* Reserve the height of two lines so choosing a level does not shove the
+     option buttons down the page under the user's thumb. */
+  min-block-size: calc(var(--fs-300) * var(--lh-normal) * 2);
+  margin-block: 0 var(--space-2);
+  font-size: var(--fs-300);
+  line-height: var(--lh-normal);
+  color: var(--text);
+}
+
+/* Before anything is chosen, the prompt is guidance rather than content. */
+.scale__meaning--empty {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.scale__meaning-level {
+  flex: none;
+  min-inline-size: 1.75em;
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-1);
+  background-color: var(--raised);
+  color: var(--text);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.scale__meaning--empty .scale__meaning-level {
+  display: none;
 }
 
 .scale__anchors-summary {
