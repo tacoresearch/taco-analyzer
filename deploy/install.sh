@@ -77,6 +77,9 @@ ACCEPT_INSECURE="no"
 CREATED_PASSWORD=""
 CREATED_EMAIL=""
 RELAXED_STAGE="0"
+# Absolute path to runuser or su, resolved on first use by detect_app_runner.
+APP_RUNNER=""
+APP_RUNNER_KIND=""
 
 # ------------------------------------------------------------------ output --
 
@@ -598,9 +601,44 @@ install_unit() {
   ok "Unit installed and enabled at boot."
 }
 
+detect_app_runner() {
+  # Resolve the privilege-dropping tool ONCE, as an absolute path.
+  #
+  # This has to happen before run_as_app narrows PATH for the child: runuser
+  # lives in /usr/sbin, which that narrowed PATH deliberately excludes, so
+  # calling it by bare name there fails with "command not found". Resolving it
+  # here keeps the narrow PATH for the application while still finding the tool.
+  local candidate
+  for candidate in /usr/sbin/runuser /sbin/runuser; do
+    if [[ -x "$candidate" ]]; then
+      APP_RUNNER="$candidate"
+      APP_RUNNER_KIND="runuser"
+      return 0
+    fi
+  done
+  candidate="$(command -v runuser 2>/dev/null || true)"
+  if [[ -n "$candidate" && -x "$candidate" ]]; then
+    APP_RUNNER="$candidate"
+    APP_RUNNER_KIND="runuser"
+    return 0
+  fi
+
+  # su is the fallback for images that ship a trimmed util-linux.
+  for candidate in /bin/su /usr/bin/su; do
+    if [[ -x "$candidate" ]]; then
+      APP_RUNNER="$candidate"
+      APP_RUNNER_KIND="su"
+      return 0
+    fi
+  done
+
+  die "Neither runuser nor su was found, so privileges cannot be dropped to ${APP_USER}."
+}
+
 run_as_app() {
   # Run a command as the service account with the service's own environment, so
   # migrations and user creation see exactly what the running app sees.
+  [[ -n "$APP_RUNNER" ]] || detect_app_runner
   (
     set -a
     # shellcheck disable=SC1090
@@ -610,9 +648,17 @@ run_as_app() {
     export NPM_CONFIG_UPDATE_NOTIFIER=false
     export PATH="/usr/local/bin:/usr/bin:/bin"
     cd "$REPO_ROOT"
-    # --preserve-environment is required: without it runuser resets HOME to the
-    # account's home, and npm cannot work without a writable HOME.
-    runuser --preserve-environment -u "$APP_USER" -- "$@"
+    # Preserving the environment is required either way: without it the tool
+    # resets HOME to the account's home directory, and npm cannot run without a
+    # writable HOME (the service account's is /nonexistent).
+    if [[ "$APP_RUNNER_KIND" == "runuser" ]]; then
+      "$APP_RUNNER" --preserve-environment -u "$APP_USER" -- "$@"
+    else
+      # su takes a single command string rather than an argument vector, so each
+      # argument is quoted individually to survive the extra shell parse.
+      "$APP_RUNNER" --preserve-environment -s /bin/bash "$APP_USER" \
+        -c "$(printf '%q ' "$@")"
+    fi
   )
 }
 
