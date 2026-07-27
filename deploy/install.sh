@@ -1039,8 +1039,24 @@ print_summary() {
     printf '  be recovered or looked up. It EXPIRES 24 HOURS after issue, and you will\n'
     printf '  be forced to choose a new one on first login.%s\n' "${C_RESET}"
     printf '  If it expires, reissue with:\n'
-    printf '    cd %s && sudo -u %s env HOME=%s npm run reset-password -- --email %s\n' \
-      "$REPO_ROOT" "$APP_USER" "$DATA_DIR" "$CREATED_EMAIL"
+    printf '    sudo %s/deploy/taco-cli.sh reset-password --email %s\n' \
+      "$REPO_ROOT" "$CREATED_EMAIL"
+    printf '\n'
+  elif [[ "$(count_users)" == "0" ]]; then
+    # The install succeeded but nobody can sign in. That is easy to miss in a
+    # long successful-looking log, so it gets its own unmissable block at the
+    # very end rather than a warn() line thousands of lines up.
+    rule
+    printf '%s ACTION REQUIRED: no accounts exist, so nobody can sign in %s\n' \
+      "${C_YELLOW}${C_BOLD}" "${C_RESET}"
+    rule
+    printf '\n'
+    printf '  The app is installed and running, but its user table is empty and\n'
+    printf '  there is no self-signup. Create the first administrator now:\n\n'
+    printf '    %ssudo %s/deploy/taco-cli.sh create-user \\\n' "${C_BOLD}" "$REPO_ROOT"
+    printf '      --email you@example.org --name "Your Name" --role admin%s\n\n' "${C_RESET}"
+    printf '  It prints a one-time password, shown once, valid for 24 hours.\n'
+    printf '  (Passing --email to this installer creates the admin automatically.)\n'
     printf '\n'
   fi
 
@@ -1141,8 +1157,9 @@ print_summary() {
   printf '  Proxy logs    journalctl -u caddy -n 100 --no-pager\n'
   printf '  Health        curl -fsS http://127.0.0.1:%s/healthz\n' "$PORT"
   printf '\n'
-  printf '  Add a user    cd %s && sudo -u %s env HOME=%s \\\n' "$REPO_ROOT" "$APP_USER" "$DATA_DIR"
-  printf '                  npm run create-user -- --email a@b.org --name "A B" --role collector\n'
+  printf '  Add a user    sudo %s/deploy/taco-cli.sh create-user \\\n' "$REPO_ROOT"
+  printf '                  --email a@b.org --name "A B" --role collector\n'
+  printf '  Reset a pw    sudo %s/deploy/taco-cli.sh reset-password --email a@b.org\n' "$REPO_ROOT"
   printf '  Update        sudo %s/deploy/update.sh\n' "$REPO_ROOT"
   printf '  Back up       sudo %s/deploy/backup.sh\n' "$REPO_ROOT"
   printf '  Uninstall     sudo %s/deploy/uninstall.sh\n' "$REPO_ROOT"

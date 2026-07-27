@@ -113,8 +113,7 @@ Password rules, which follow NIST SP 800-63B:
 If you lose the password before using it, or it expires:
 
 ```bash
-cd /opt/taco-analyzer
-npm run reset-password -- --email you@example.org
+sudo /opt/taco-analyzer/deploy/taco-cli.sh reset-password --email you@example.org
 ```
 
 ---
@@ -130,9 +129,14 @@ it over on paper. Do not send it through the same channel as their email address
 **From the shell:**
 
 ```bash
-cd /opt/taco-analyzer
-npm run create-user -- --email collector@example.org --name "Sam Collector" --role collector
+sudo /opt/taco-analyzer/deploy/taco-cli.sh create-user   --email collector@example.org --name "Sam Collector" --role collector
 ```
+
+`taco-cli.sh` runs the command as the service account with the service's own
+environment. Do not call `npm run create-user` directly: without the env file
+the app falls back to a `./data` directory relative to the working directory,
+and instead of failing cleanly it tries to create a second, empty database
+inside the repository.
 
 Roles: `collector` sees and submits only their own surveys. `admin` additionally
 sees everyone's surveys and manages users.
