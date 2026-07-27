@@ -5,43 +5,51 @@ conversation that produced it. Ordered roughly by when it should be picked up.
 
 ---
 
-## 0. First deploy shakedown (do this before anything else)
+## 0. Deploy verification: what is proven, what is not
 
-**Nothing in this repository has been executed.** It was written against verified
-documentation and reviewed by eye, but no JavaScript runtime was available on the
-machine where it was built, so not one line has been parsed by an engine, let
-alone run. Treat the first deploy as the real test.
+**Deployed and verified 2026-07-27** on a Debian 13 (trixie) unprivileged LXC,
+from a clean clone plus `bash deploy/install.sh --lan --hostname taco.lan
+--email ...`. Five real bugs were found and fixed in the process, all of them
+things no amount of re-reading would have caught.
 
-Known and expected:
+Proven working:
 
-- **`npm ci` will fail on the first install**, because there is no
-  `package-lock.json` yet (dependencies were never installed). `deploy/install.sh`
-  and `update.sh` fall back to `npm install`, which will work and generate one.
-  Commit the lockfile afterwards.
-- **Run `node scripts/check-syntax.js` first.** It parses every file without
-  executing it, and will catch typos far faster than a crashing service will.
-  Note the script itself has never run either; if it misbehaves,
-  `node --check <file>` on a couple of files is the manual equivalent.
-- **`npm test` has no tests yet.** `test/photos.test.js` was specified in detail
-  but never written (the session ran out before it landed). The photo pipeline is
-  the most intricate code here (hand-rolled JPEG segment walking, PNG chunk
-  parsing with CRC validation, WebP RIFF rewriting, TIFF/Exif offset arithmetic)
-  and it is the part most in need of tests. The full list of cases to cover is in
-  the git history of this file's sibling commits; at minimum test malformed and
-  truncated inputs for each format, GPS extraction in both TIFF byte orders, and
-  that a temp file never survives a validation failure.
-- **Cross-file call sites.** Components were written in parallel. The known
-  mismatches were reconciled (admin activate/deactivate paths, `addPhoto`
-  metadata, the extra optional view arguments), but more may remain. They present
-  as immediate crashes with clear stack traces, not subtle misbehaviour.
-- **The LXC hardening fallbacks in `install.sh` have never run.** The detection
-  for `243/CREDENTIALS` and `step NAMESPACE`, and the override it writes, are
-  reasoned from documented failure modes but unverified against a real container.
-- **Check the startup banner** for which password algorithm was selected. It
-  should say `argon2id` on Node 24.18; `scrypt` means the probe failed and is
-  worth investigating, though it is a safe fallback.
+- The installer end to end, exit 0 from a bare container: Node 24.18.0 tarball
+  with GPG signature verification, `npm install` with no compiler needed
+  (better-sqlite3's bundled Node-API prebuild loaded fine), migrations, the
+  hardened systemd unit, Caddy with its internal CA.
+- **The full systemd hardening applied cleanly in an unprivileged LXC.** None of
+  the mount-namespace fallbacks triggered, and Caddy bound ports 80 and 443 via
+  ambient `CAP_NET_BIND_SERVICE`, which had been flagged as unverified.
+- **Argon2id was selected at runtime**, confirming Node's built-in
+  `crypto.argon2` works and the scrypt fallback was not needed.
+- Sign-in with a one-time password, the forced password change, survey
+  submission, the dashboard, list and detail pages, admin pages, sign-out.
+- Data correctness: price stored as integer cents, taste average computed to the
+  expected 4.25, 11 response rows for 3 observer plus 8 item metrics.
+- Rejections, which matter more than the happy path: forged CSRF token 403,
+  cross-origin POST 403, wrong password returns the same generic message and
+  status as an unknown account.
+- `npm test`: 42 pass, 0 fail. `check-syntax`: 41 files, no errors.
 
----
+**Not yet verified. Do these next:**
+
+1. **A real photo upload from an actual phone.** This is the biggest remaining
+   gap. The pipeline passes 42 synthetic tests, but no genuine camera JPEG has
+   been through it, so GPS extraction from real EXIF is untested against real
+   data. Take a photo with location on, submit it, and check that
+   `gps_latitude`/`gps_longitude` land in the `photos` table AND that the served
+   file has no EXIF (`exiftool` on the stored file should show nothing).
+   Also confirm whether the phone produces HEIC, which is currently rejected.
+2. **The `--public` Let's Encrypt path.** Only the LAN internal-CA path has run.
+3. **The LXC hardening fallbacks**, which never executed because they were not
+   needed. That detection code is therefore still unexercised.
+4. **`update.sh` and `backup.sh`.** Neither has run. `update.sh` uses `setpriv`
+   with an `xargs`-built environment that is fragile and probably has the same
+   class of bug as the `runuser` PATH issue that was just fixed here.
+5. **A second browser, on a real phone.** Everything so far was curl. The CSS,
+   the scale widget's nine touch targets, and the theme toggle have never been
+   rendered by a browser.
 
 ## 0b. Wire up the two client-side hooks the views already emit
 
