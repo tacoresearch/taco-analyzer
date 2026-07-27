@@ -39,13 +39,17 @@ __HOSTNAME__ {
 	}
 
 	reverse_proxy 127.0.0.1:__PORT__ {
-		# OVERWRITES X-Forwarded-For rather than appending. Caddy appends by
-		# default, which would let a client forge its own source address and
-		# evade the app's per-IP login throttling (the app runs with
-		# TRUST_PROXY=1 behind this proxy).
-		header_up X-Forwarded-For {remote_host}
-		header_up X-Forwarded-Proto {scheme}
-		header_up X-Forwarded-Host {host}
+		# X-Forwarded-For, -Proto and -Host are deliberately NOT restated here.
+		# reverse_proxy sets them itself, and Caddy logs a warning if you repeat
+		# them.
+		#
+		# On forwarded addresses: Caddy APPENDS the real peer to any incoming
+		# X-Forwarded-For rather than replacing it, so a client that sends
+		# "X-Forwarded-For: 1.2.3.4" produces "1.2.3.4, <real ip>". That is safe
+		# here because the app reads the RIGHTMOST entry, which is the one Caddy
+		# appended and the only one it can vouch for. A forged prefix is ignored.
+		# If you ever put another proxy (a CDN, a load balancer) in front of
+		# Caddy, revisit that assumption in server/auth/middleware.js (clientIp).
 
 		transport http {
 			dial_timeout 5s

@@ -855,10 +855,27 @@ configure_caddy() {
   install -m 0644 -o root -g root "$tmp" "$CADDY_FILE"
   rm -f "$tmp"
 
+  # Pre-create the access log owned by caddy, BEFORE validating.
+  #
+  # `caddy validate` instantiates the configured log writers, and it runs here as
+  # root, so it creates /var/log/caddy/taco-analyzer.log as root:root 0600. The
+  # service then runs as the caddy user and cannot open its own log file, and
+  # Caddy treats that as fatal: it exits 1 with "permission denied" and the whole
+  # proxy never starts. Creating the file with the right owner first, and
+  # correcting ownership again afterwards, closes both orderings.
+  install -d -m 0750 -o caddy -g caddy /var/log/caddy 2>/dev/null || true
+  install -m 0640 -o caddy -g caddy /dev/null /var/log/caddy/${APP_NAME}.log 2>/dev/null || true
+
   if ! caddy validate --config "$CADDY_FILE" --adapter caddyfile >/dev/null 2>&1; then
     caddy validate --config "$CADDY_FILE" --adapter caddyfile || true
     die "Caddy rejected the generated configuration (${CADDY_FILE}). The error is above."
   fi
+
+  # Validation may have recreated the file as root even though it existed; fix
+  # ownership unconditionally rather than assuming.
+  chown caddy:caddy "/var/log/caddy/${APP_NAME}.log" 2>/dev/null || true
+  chmod 0640 "/var/log/caddy/${APP_NAME}.log" 2>/dev/null || true
+
   ok "Caddyfile validates."
 
   systemctl enable caddy >/dev/null 2>&1 || true
