@@ -69,11 +69,19 @@ if [[ "$PURGE" == "yes" ]]; then
 
   # Read from the terminal explicitly so this cannot be satisfied by a piped
   # stdin, which would defeat the whole point of asking.
-  if [[ ! -t 0 ]] && [[ ! -r /dev/tty ]]; then
+  #
+  # Test by actually OPENING /dev/tty, not with -r. Over a non-interactive ssh
+  # session the device node exists and looks readable, but opening it fails with
+  # ENXIO, which under `set -e` aborted the script with a raw
+  # "/dev/tty: No such device or address" instead of the clear refusal below.
+  if ! exec 3</dev/tty 2>/dev/null; then
     printf '\n'
-    die "Refusing to purge without an interactive confirmation."
+    die "Refusing to purge without an interactive terminal to confirm on.
+       Run this directly over an interactive session, not through a pipe,
+       a heredoc, or 'ssh host command'."
   fi
-  read -r reply < /dev/tty
+  read -r reply <&3
+  exec 3<&-
   if [[ "$reply" != "delete the taco data" ]]; then
     printf '\n'
     die "Confirmation did not match. Nothing was deleted."

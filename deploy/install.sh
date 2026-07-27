@@ -934,8 +934,13 @@ count_users() {
   [[ -n "${WORK_DIR}" ]] || { WORK_DIR="$(mktemp -d)"; script="${WORK_DIR}/count-users.cjs"; }
   cat >"$script" <<'JS'
 // Count rows in users, tolerating a database that has no such table yet.
-const Database = require('better-sqlite3');
-const db = new Database(process.env.TACO_DB_FILE);
+//
+// better-sqlite3 is required by ABSOLUTE path. Node resolves a bare specifier
+// relative to the requiring file, not the working directory, and this script
+// lives in a temp directory, so `require('better-sqlite3')` could never find
+// the app's node_modules no matter where the process was started from.
+const Database = require(process.env.TACO_BSQLITE);
+const db = new Database(process.env.TACO_DB_FILE, { readonly: true });
 const present = db
   .prepare("SELECT count(*) AS c FROM sqlite_master WHERE type='table' AND name='users'")
   .get().c;
@@ -944,7 +949,23 @@ JS
   chmod 0644 "$script"
   chown "root:${APP_GROUP}" "$script" 2>/dev/null || true
   chmod 0755 "$WORK_DIR"
-  TACO_DB_FILE="$db" run_as_app env "TACO_DB_FILE=$db" "$NODE_BIN" "$script" 2>/dev/null || printf 'error'
+
+  local out errfile
+  errfile="$(mktemp)"
+  if out="$(run_as_app env "TACO_DB_FILE=$db" \
+        "TACO_BSQLITE=${REPO_ROOT}/node_modules/better-sqlite3" \
+        "$NODE_BIN" "$script" 2>"$errfile")"; then
+    rm -f "$errfile"
+    printf '%s' "$out"
+  else
+    # Do not swallow this. A failure here silently skips first-admin creation and
+    # leaves an install nobody can sign in to, which is exactly the bug this
+    # comment exists to prevent recurring.
+    warn "Could not count existing users. The error was:"
+    sed 's/^/    /' "$errfile" >&2
+    rm -f "$errfile"
+    printf 'error'
+  fi
 }
 
 maybe_create_first_admin() {
@@ -1023,6 +1044,11 @@ print_summary() {
   printf '  %sNode.js%s          %s  (%s -> %s)\n' "$C_BOLD" "$C_RESET" "$NODE_VER" "${NODE_PREFIX}/current" "$NODE_DIR"
   printf '\n'
 
+  # Counted once here rather than inside the conditionals below, so the check
+  # (which spawns node) runs a single time and any warning it emits appears once.
+  local SUMMARY_USER_COUNT
+  SUMMARY_USER_COUNT="$(count_users)"
+
   if [[ -n "$CREATED_EMAIL" ]]; then
     rule
     printf '%s FIRST ADMIN ACCOUNT: WRITE THIS DOWN NOW %s\n' "${C_YELLOW}${C_BOLD}" "${C_RESET}"
@@ -1042,7 +1068,10 @@ print_summary() {
     printf '    sudo %s/deploy/taco-cli.sh reset-password --email %s\n' \
       "$REPO_ROOT" "$CREATED_EMAIL"
     printf '\n'
-  elif [[ "$(count_users)" == "0" ]]; then
+  elif [[ ! "$SUMMARY_USER_COUNT" =~ ^[1-9][0-9]*$ ]]; then
+    # Reached when the user table is empty OR when the count could not be taken.
+    # Both need the same action from the operator, and treating "unknown" as
+    # "probably fine" is exactly how an unusable install slips past unnoticed.
     # The install succeeded but nobody can sign in. That is easy to miss in a
     # long successful-looking log, so it gets its own unmissable block at the
     # very end rather than a warn() line thousands of lines up.
