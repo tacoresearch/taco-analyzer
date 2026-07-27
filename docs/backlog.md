@@ -51,25 +51,23 @@ Proven working:
    the scale widget's nine touch targets, and the theme toggle have never been
    rendered by a browser.
 
-## 0b. Wire up the two client-side hooks the views already emit
+## 0b. Wire up the remaining client-side hook
 
-`server/views/` renders two attributes that `public/app.js` does not yet handle:
+`data-password-toggle` is **done** (app.js now handles it, preserving the caret
+and re-concealing on submit or tab hide).
 
-- `data-password-toggle="<input id>"` on a show-password button (with
-  `aria-controls` and `aria-pressed`). NIST recommends offering a reveal option,
-  and the button is currently **inert**, which is worse than absent: it looks
-  clickable and does nothing.
-- `data-confirm="<sentence>"` on destructive admin submits, intended to intercept
-  and confirm before the POST.
+Still inert: **`data-confirm="<sentence>"`** on the destructive admin submits
+(deactivate, reset password, change role). The attribute is rendered but no
+handler reads it, so those actions fire immediately with no confirmation step.
+They are all reversible by an admin and none of them destroy survey data, so this
+is a papercut rather than a hazard, but it is a visible promise the UI is not
+keeping.
 
-Both need small handlers in `public/app.js`, following that file's existing
-pattern of independently guarded features. The forms all work without them (the
-destructive actions are real POSTs and simply skip the confirmation), so this is a
-polish and honesty fix rather than a functional one. Alternative, if you would
-rather not add the JavaScript: drop the toggle button from
-`server/views/password.js` and `server/views/login.js`.
-
----
+A handler belongs in `public/app.js` next to `initPasswordToggles`, following the
+same independently-guarded pattern: intercept submit on any form containing a
+`[data-confirm]` submit button, and only proceed if confirmed. Note that
+`window.confirm` is blocked in some embedded browsers, so treat a blocked dialog
+as "do not proceed" rather than assuming it returned true.
 
 ## 1. Surface photo GPS coordinates in the survey UI
 
