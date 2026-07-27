@@ -56,9 +56,10 @@
   --tb-magenta: #E5177E;
   --tb-teal: #00B3B8;
   --tb-teal-lt: #2ED9C3;
-  /* Baja Blast cyan, for the wordmark. Bluer than --tb-teal, which is
-     the point: it is the one place the palette gets to be loud. */
-  --tb-baja: #3FD8E8;
+  /* Baja Blast, for the wordmark. A jade green rather than the palette's
+     blue-leaning --tb-teal, which is the point: it is the one place the palette
+     gets to be loud. */
+  --tb-baja: #2AA97A;
   --tb-yellow: #FFC72C;
 
   /* --- Dark greys. Dark is the default theme. --- */
@@ -86,7 +87,7 @@
   --accent-purple-text: #C08FE0;
   --accent-magenta-text: #FF4D9D;
   --accent-teal-text: #2ED9C3;
-  --accent-baja-text: #3FD8E8;
+  --accent-baja-text: #2AA97A;
   --accent-yellow-text: #FFC72C;
 
   /* --- Semantic roles. --- */
@@ -203,7 +204,7 @@
     --accent-purple-text: #6E2A8C;
     --accent-magenta-text: #AE0F5E;
     --accent-teal-text: #00767A;
-    --accent-baja-text: #00707E;
+    --accent-baja-text: #0E7A52;
     --accent-yellow-text: #7A5300;
 
     --focus-ring: var(--tb-purple);
@@ -248,7 +249,7 @@
   --accent-purple-text: #6E2A8C;
   --accent-magenta-text: #AE0F5E;
   --accent-teal-text: #00767A;
-  --accent-baja-text: #00707E;
+  --accent-baja-text: #0E7A52;
   --accent-yellow-text: #7A5300;
 
   --focus-ring: var(--tb-purple);
@@ -529,10 +530,16 @@ h4 { font-size: var(--fs-400); }
   color: var(--text);
 }
 
-/* The single loud word, in Baja Blast cyan. Uses the per-theme tint rather than
-   the raw brand hex: #3FD8E8 measures 10.97:1 on the dark page and the light
-   variant #00707E measures 5.53:1 on the light page, so it clears 4.5:1 in both
-   even though a mark this large would only need 3:1.
+/* The single loud word, in Baja Blast green (#2AA97A).
+
+   Two tints, not one shared hex, because the brand green reaches only 2.84:1 on
+   the light page: legible against near-black, invisible against white. The light
+   variant #0E7A52 is the same hue (157.8 degrees), darkened until it passes.
+
+   Dark  #2AA97A: 6.32:1 page, 5.81:1 surface, 5.30:1 raised.
+   Light #0E7A52: 5.10:1 page, 5.35:1 surface, 4.73:1 raised.
+
+   All clear 4.5:1 everywhere the mark can sit, though text this large needs 3:1.
 
    Moving it off magenta also frees magenta to mean exactly one thing, which is
    destructive actions. An accent that is both decorative and semantic teaches
