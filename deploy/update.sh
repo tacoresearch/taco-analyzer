@@ -91,16 +91,10 @@ if [[ "$DO_PULL" == "yes" ]]; then
   fi
 fi
 
-log "Installing dependencies"
-# --omit=dev because nothing in devDependencies is needed at runtime, and
-# `npm ci` so the lockfile is authoritative rather than resolved afresh.
-if [[ -f "${REPO_ROOT}/package-lock.json" ]]; then
-  ( cd "$REPO_ROOT" && npm ci --omit=dev --no-audit --no-fund )
-else
-  warn "No package-lock.json found; falling back to npm install."
-  ( cd "$REPO_ROOT" && npm install --omit=dev --no-audit --no-fund )
-fi
-ok "dependencies installed"
+# shellcheck source=lib/deps.sh
+. "${REPO_ROOT}/deploy/lib/deps.sh"
+taco_install_dependencies "$REPO_ROOT" "$(command -v node || echo /usr/local/bin/node)"
+chown -R "root:${APP_USER}" "${REPO_ROOT}/node_modules" 2>/dev/null || true
 
 log "Checking for syntax errors before restarting"
 # Cheap, and it catches the class of mistake that would otherwise take the
@@ -112,11 +106,11 @@ log "Stopping the service"
 systemctl stop "$SERVICE_NAME" 2>/dev/null || true
 
 log "Applying migrations"
-# Run as the app user so nothing in the data directory ends up owned by root.
-install -d -o "$APP_USER" -g "$APP_USER" -m 0750 "$DATA_DIR"
-setpriv --reuid="$APP_USER" --regid="$APP_USER" --init-groups --inh-caps=-all \
-  env "HOME=${DATA_DIR}" $(grep -E '^[A-Z_]+=' "$ENV_FILE" | xargs) \
-  node "${REPO_ROOT}/scripts/migrate.js"
+# Delegated to taco-cli.sh rather than assembled here. The previous version built
+# the environment with `grep | xargs`, which mangles any value containing a space
+# and silently drops nothing-looking lines; taco-cli.sh sources the env file
+# properly and resolves the privilege-drop tool by absolute path.
+bash "${REPO_ROOT}/deploy/taco-cli.sh" migrate || die "migrations failed"
 ok "migrations applied"
 
 log "Restarting the service"

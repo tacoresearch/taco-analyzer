@@ -466,38 +466,11 @@ set_code_ownership() {
 # ------------------------------------------------------------ npm install --
 
 install_dependencies() {
-  log "Installing production npm dependencies."
-  local flags=(--omit=dev --no-audit --no-fund --loglevel=warn)
-  local installer=(npm ci)
-  if [[ ! -f "${REPO_ROOT}/package-lock.json" ]]; then
-    warn "No package-lock.json in the repository, so 'npm ci' cannot be used and dependency versions are resolved fresh at install time. That means two installs on different days can get different transitive dependencies. Commit a lockfile."
-    installer=(npm install)
-  fi
-
-  # --ignore-scripts is a real hardening win: it stops any dependency (direct or
-  # transitive) from executing arbitrary code as root at install time. It works
-  # here because none of this app's dependencies need a build step:
-  # better-sqlite3 13.x is Node-API based and ships prebuilds/linux-x64.node in
-  # its npm tarball with no install script, and hono is pure JavaScript.
-  # If that ever stops being true the fallback below handles it.
-  if ! ( cd "$REPO_ROOT" && HOME=/root NPM_CONFIG_UPDATE_NOTIFIER=false \
-         "${installer[@]}" "${flags[@]}" --ignore-scripts ); then
-    warn "Dependency install failed with --ignore-scripts. Retrying with a compiler toolchain available, in case a dependency now needs to build from source."
-    apt_install build-essential python3 pkg-config
-    ( cd "$REPO_ROOT" && HOME=/root NPM_CONFIG_UPDATE_NOTIFIER=false \
-      "${installer[@]}" "${flags[@]}" ) \
-      || die "npm dependency install failed. Read the output above; a network problem and a native build failure look quite different."
-  fi
-
-  # Fail here, with a clear message, rather than in a systemd restart loop.
-  if ! ( cd "$REPO_ROOT" && "$NODE_BIN" -e 'require("better-sqlite3")' ); then
-    die "better-sqlite3 installed but will not load.
-If the error above mentions GLIBCXX or libstdc++, install it:
-    apt-get install -y --no-install-recommends libstdc++6
-The bundled prebuild needs glibc >= 2.34 and GLIBCXX_3.4.29; Debian 13 ships
-glibc 2.41, so this is normally only seen on a very minimal container rootfs."
-  fi
-  ok "Dependencies installed and better-sqlite3 loads."
+  # Delegates to deploy/lib/deps.sh, which update.sh also sources. They used to
+  # have separate copies of this logic and drifted, breaking upgrades.
+  # shellcheck source=lib/deps.sh
+  . "${DEPLOY_DIR}/lib/deps.sh"
+  taco_install_dependencies "$REPO_ROOT" "$NODE_BIN"
   chown -R "root:${APP_GROUP}" "${REPO_ROOT}/node_modules"
 }
 
