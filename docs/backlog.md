@@ -69,6 +69,66 @@ same independently-guarded pattern: intercept submit on any form containing a
 `window.confirm` is blocked in some embedded browsers, so treat a blocked dialog
 as "do not proceed" rather than assuming it returned true.
 
+## 1. Admin edit, with an audit trail
+
+Requested after real use. Surveys are currently write-once: submit and it is
+final. That is a defensible default (it keeps collected data honest) but it has
+no escape hatch for a typo noticed later, and the one-shot form makes typos
+likely.
+
+Wanted: an admin can edit a submitted survey, and the survey detail page shows a
+history at the bottom of what changed, by whom, and when.
+
+### Design notes for whoever builds it
+
+**Do not mutate rows in place and log a message about it.** That gives a log that
+can silently disagree with the data. Record the change as the source of truth:
+
+```sql
+CREATE TABLE survey_revisions (
+  id          INTEGER PRIMARY KEY,
+  survey_id   INTEGER NOT NULL REFERENCES surveys(id) ON DELETE CASCADE,
+  changed_by  INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  changed_at  TEXT    NOT NULL,
+  reason      TEXT,            -- optional, prompt for it; it is the useful part
+  field       TEXT    NOT NULL,-- 'business_name', 'item.0.price_cents',
+                               -- 'metric.hunger', 'item.0.metric.tortilla'
+  old_value   TEXT,
+  new_value   TEXT
+) STRICT;
+```
+
+One row per changed field, using the same field-name vocabulary as the form
+(server/lib/validate.js header). That keeps the trail readable without a join to
+interpret it, and it survives a rubric gaining metrics.
+
+Specifics worth getting right:
+
+- **Reuse the existing validator.** An edit must go through
+  `validateSurveySubmission` exactly as a create does, or edits become the way
+  invalid data gets in.
+- **Write the revision rows and the update in one transaction.** A trail that can
+  be missing entries is worse than no trail, because it will be trusted.
+- **`changed_by` is ON DELETE RESTRICT** for the same reason `surveys.user_id`
+  is: an audit trail that loses its author is not an audit trail.
+- **Record only fields that actually changed.** Resubmitting a form unchanged
+  should produce no revision rows at all.
+- **Admins only**, and consider showing the trail to the survey's author too:
+  someone should be able to see that their submission was edited.
+- **Photos:** decide whether an edit can replace or remove one. If it can
+  remove, the file needs deleting as well, and the trail should record that it
+  happened without keeping the image. Note the app never deletes surveys today,
+  so nothing currently cleans up photo files on deletion; if survey deletion is
+  ever added, it must delete files too (SQLite's ON DELETE CASCADE removes the
+  row, not the file on disk).
+- **Do not add a delete-survey button** at the same time. Edit plus trail is
+  recoverable; delete is not, and the two are easy to conflate in a hurry.
+
+Presentation: a `.data-table` under the existing sections on the detail page,
+newest first, reading like "Havell changed Menu price from $14.25 to $3.50 on
+27 Jul 2026". Empty state when a survey has never been edited, so the absence of
+a trail is explicit rather than ambiguous.
+
 ## 1. Surface photo GPS coordinates in the survey UI
 
 **Status: half done.** Extraction is implemented; display is not.
