@@ -9,8 +9,9 @@ conversation that produced it. Ordered roughly by when it should be picked up.
 
 **Deployed and verified 2026-07-27** on a Debian 13 (trixie) unprivileged LXC,
 from a clean clone plus `bash deploy/install.sh --lan --hostname taco.lan
---email ...`. Five real bugs were found and fixed in the process, all of them
-things no amount of re-reading would have caught.
+--email ...`. Seven real bugs were found and fixed across that deploy and the
+first backup and upgrade runs, all of them things no amount of re-reading would
+have caught.
 
 Proven working:
 
@@ -44,9 +45,14 @@ Proven working:
 2. **The `--public` Let's Encrypt path.** Only the LAN internal-CA path has run.
 3. **The LXC hardening fallbacks**, which never executed because they were not
    needed. That detection code is therefore still unexercised.
-4. **`update.sh` and `backup.sh`.** Neither has run. `update.sh` uses `setpriv`
-   with an `xargs`-built environment that is fragile and probably has the same
-   class of bug as the `runuser` PATH issue that was just fixed here.
+4. ~~`update.sh` and `backup.sh`~~ **Both now run and are verified.**
+   `backup.sh` was restored into a scratch copy and matched live row for row with
+   a matching photo checksum. `update.sh` failed on its first run (npm tried to
+   compile better-sqlite3 from source because it lacked the installer's
+   `--ignore-scripts`) and now shares one dependency routine with install.sh via
+   `deploy/lib/deps.sh`. Its fragile `xargs`-built environment was replaced with a
+   call to `taco-cli.sh migrate`. **Still untested: restoring onto a different
+   machine (item 0c) and a scheduled backup.**
 5. **A second browser, on a real phone.** Everything so far was curl. The CSS,
    the scale widget's nine touch targets, and the theme toggle have never been
    rendered by a browser.
