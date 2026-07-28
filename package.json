@@ -15,7 +15,8 @@
     "reset-password": "node scripts/reset-password.js",
     "test": "node --test --test-reporter=spec \"test/**/*.test.js\"",
     "check": "node --run check:syntax && node --run test",
-    "check:syntax": "node scripts/check-syntax.js"
+    "check:syntax": "node scripts/check-syntax.js",
+    "prune-orphans": "node scripts/prune-orphans.js"
   },
   "dependencies": {
     "@hono/node-server": "^2.0.12",

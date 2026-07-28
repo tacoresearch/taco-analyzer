@@ -15,6 +15,7 @@ import { closeDatabase, migrate, openDatabase } from './db/index.js';
 import { probeHashing } from './auth/passwords.js';
 import { pruneExpired } from './auth/sessions.js';
 import { prunePreAuthTokens } from './auth/preauth.js';
+import { findOrphanedUploads, prunePendingPhotos } from './db/pending-photos.js';
 
 /** How often to sweep expired sessions and throttling rows. */
 const PRUNE_INTERVAL_MS = 15 * 60 * 1000;
@@ -55,6 +56,24 @@ async function main() {
   // worse way to find out.
   const { algorithm } = await probeHashing({ log });
 
+  // Report, do not delete. Files can be orphaned by a crash between writing the
+  // file and writing its row, and every failed submit orphaned one before
+  // pending_photos existed. Deleting user data at boot on a heuristic is not a
+  // trade worth making, so this only tells the operator where to look.
+  try {
+    const { orphans, bytes } = findOrphanedUploads(config.uploadDir);
+    if (orphans.length > 0) {
+      warn(
+        `${orphans.length} uploaded file(s) in ${config.uploadDir} are not referenced ` +
+          `by any survey (${Math.round(bytes / 1024)} KB). They are most likely from ` +
+          'submissions that failed validation before unclaimed uploads were tracked. ' +
+          'Review them, then remove with: sudo deploy/taco-cli.sh prune-orphans',
+      );
+    }
+  } catch {
+    // A reporting nicety must never prevent startup.
+  }
+
   const app = createApp({ config });
 
   const server = serve(
@@ -75,10 +94,12 @@ async function main() {
     try {
       const { sessions, loginAttempts } = pruneExpired();
       const preAuth = prunePreAuthTokens();
-      if (sessions || loginAttempts || preAuth) {
+      // Also deletes the files, so an abandoned draft does not keep megabytes.
+      const photos = prunePendingPhotos(config.uploadDir);
+      if (sessions || loginAttempts || preAuth || photos) {
         log(
           `pruned ${sessions} sessions, ${loginAttempts} login attempts, ` +
-            `${preAuth} pre-auth tokens`,
+            `${preAuth} pre-auth tokens, ${photos} unclaimed photos`,
         );
       }
     } catch (error) {

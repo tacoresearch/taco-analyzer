@@ -5,6 +5,7 @@
 #
 #   sudo deploy/taco-cli.sh create-user --email you@example.org --name "You" --role admin
 #   sudo deploy/taco-cli.sh reset-password --email you@example.org
+#   sudo deploy/taco-cli.sh prune-orphans [--delete]
 #   sudo deploy/taco-cli.sh migrate
 #   sudo deploy/taco-cli.sh check-syntax
 #   sudo deploy/taco-cli.sh test
@@ -53,7 +54,7 @@ esac
 COMMAND="$1"; shift
 
 case "$COMMAND" in
-  create-user|reset-password|migrate|check-syntax|test) ;;
+  create-user|reset-password|migrate|check-syntax|test|prune-orphans) ;;
   *) die "Unknown command: ${COMMAND}. Try --help." ;;
 esac
 

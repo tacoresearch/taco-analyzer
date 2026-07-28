@@ -410,7 +410,13 @@ function scaleFieldset({ section, metric, name, value = '', error = null, errorL
 /**
  * @param {{maxBytes: number, itemNoun: string, error?: ?string}} input
  */
-function photoField({ maxBytes, itemNoun, error = null }) {
+function photoField({
+  maxBytes,
+  itemNoun,
+  error = null,
+  photoToken = null,
+  photoName = null,
+}) {
   const formats = joinWords(
     ACCEPTED_MIME_TYPES.map(
       (type) => FORMAT_LABELS[type] ?? type.replace('image/', '').toUpperCase(),
@@ -426,6 +432,30 @@ function photoField({ maxBytes, itemNoun, error = null }) {
                 Photo of the ${itemNoun}
                 <span class="optional-marker">Optional</span>
               </label>
+              ${
+                // A photo accepted on an earlier attempt that failed validation.
+                // The browser cannot refill a file input, so without saying this
+                // plainly the user assumes their photo is gone (or worse, assumes
+                // it is still attached when it is not). The hidden field is what
+                // actually carries it; the message is what stops the guessing.
+                photoToken
+                  ? html`
+              <input type="hidden" name="photo_token" value="${photoToken}">
+              <p class="flash flash--info photo-field__kept" role="status">
+                <span class="flash__label">Photo kept</span>
+                <span>
+                  ${
+                    photoName
+                      ? html`Your photo <strong>${photoName}</strong> is still attached.`
+                      : html`Your photo is still attached.`
+                  }
+                  The box below looks empty because browsers will not refill a file
+                  picker, but you do not need to choose it again. Pick a different file
+                  only if you want to replace it.
+                </span>
+              </p>`
+                  : ''
+              }
               <p class="field__hint" id="photo-hint">
                 ${formats}, up to ${megabytes(maxBytes)} MB. One photo per survey. Your
                 camera or your gallery, whichever is easier.
@@ -486,6 +516,8 @@ export function surveyFormPage({
   errors = null,
   itemCount = 1,
   maxPhotoBytes = DEFAULT_MAX_PHOTO_BYTES,
+  photoToken = null,
+  photoName = null,
 }) {
   const count = Math.max(1, Number(itemCount) || 1);
   const failed = Boolean(errors && errors.count > 0);
@@ -614,7 +646,13 @@ export function surveyFormPage({
             Both optional, both useful later. A photo settles arguments about portion
             size, and notes catch whatever the rubric has no box for.
           </p>
-          ${photoField({ maxBytes: maxPhotoBytes, itemNoun, error: errorOf('photo') })}
+          ${photoField({
+            maxBytes: maxPhotoBytes,
+            itemNoun,
+            error: errorOf('photo'),
+            photoToken,
+            photoName,
+          })}
           ${
             rubric.notesField
               ? fieldBlock({

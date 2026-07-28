@@ -7,6 +7,14 @@ import { verifyCsrf, CSRF_FIELD_NAME } from '../security/csrf.js';
 import { DEFAULT_RUBRIC_KEY, getRubric } from '../rubrics/index.js';
 import { validateSurveySubmission, ValidationErrors } from '../lib/validate.js';
 import { addPhoto, createSurvey, getSurvey, listSurveys } from '../db/surveys.js';
+import {
+  consumePendingPhoto,
+  createPendingPhoto,
+  discardPendingPhoto,
+  getPendingPhoto,
+  pendingToPhotoInput,
+  removeUpload,
+} from '../db/pending-photos.js';
 import { PhotoError, storePhoto } from '../lib/photos.js';
 import { surveyFormPage } from '../views/survey-form.js';
 import { surveyListPage } from '../views/survey-list.js';
@@ -15,6 +23,9 @@ import { todayIsoDate } from '../lib/format.js';
 
 /** Only one item per survey in v1. The schema already allows more. */
 const ITEM_COUNT = 1;
+
+/** Hidden field carrying a photo across a submission that failed validation. */
+const PHOTO_TOKEN_FIELD = 'photo_token';
 
 /**
  * Flatten a parsed body into the string map the validator expects.
@@ -131,6 +142,11 @@ export function registerSurveyRoutes(app) {
       typeof uploaded.name === 'string' &&
       uploaded.size > 0;
 
+    // A photo carried over from a previous attempt that failed validation. The
+    // browser cannot refill a file input, so without this the user silently
+    // loses the photo the moment they mistype anything else on the form.
+    let carried = getPendingPhoto(values[PHOTO_TOKEN_FIELD], user.id);
+
     if (hasFile) {
       try {
         const bytes = Buffer.from(await uploaded.arrayBuffer());
@@ -141,6 +157,12 @@ export function registerSurveyRoutes(app) {
           tempDir: config.tempDir,
           maxBytes: config.maxUploadBytes,
         });
+        // A newly chosen file replaces the carried one, so the old file goes now
+        // rather than waiting for the expiry sweep.
+        if (carried) {
+          discardPendingPhoto(carried, config.uploadDir);
+          carried = null;
+        }
       } catch (error) {
         if (error instanceof PhotoError) {
           result.errors.add('photo', error.message);
@@ -151,6 +173,23 @@ export function registerSurveyRoutes(app) {
     }
 
     if (!result.ok || !result.errors.ok) {
+      // The submission is going back to the user for correction. Hold on to any
+      // photo already accepted, so fixing a typo does not cost them the picture.
+      let photoToken = carried?.token ?? null;
+      if (storedPhoto) {
+        try {
+          photoToken = createPendingPhoto({ userId: user.id, stored: storedPhoto });
+        } catch (error) {
+          // If we cannot record it we must not leave the file behind, or every
+          // failed submit leaks megabytes that nothing will ever clean up.
+          removeUpload(config.uploadDir, storedPhoto.storageName);
+          photoToken = null;
+          process.stderr.write(
+            `[warn] could not hold uploaded photo across a failed submit: ${error.message}\n`,
+          );
+        }
+      }
+
       return c.html(
         String(
           surveyFormPage({
@@ -160,6 +199,9 @@ export function registerSurveyRoutes(app) {
             values,
             errors: result.errors,
             itemCount: ITEM_COUNT,
+            photoToken,
+            photoName:
+              storedPhoto?.originalName ?? carried?.original_name ?? null,
           }),
         ),
         422,
@@ -176,6 +218,8 @@ export function registerSurveyRoutes(app) {
       status: 'submitted',
     });
 
+    // Either a photo uploaded with this request, or one accepted during an
+    // earlier attempt that failed validation.
     if (storedPhoto) {
       addPhoto({
         surveyId: created.id,
@@ -189,6 +233,16 @@ export function registerSurveyRoutes(app) {
         caption: null,
         metadata: storedPhoto.metadata,
       });
+    } else if (carried) {
+      addPhoto({
+        surveyId: created.id,
+        surveyItemId: null,
+        uploadedBy: user.id,
+        caption: null,
+        ...pendingToPhotoInput(carried),
+      });
+      // The photos table owns the file now, so only the holding record goes.
+      consumePendingPhoto(carried.token);
     }
 
     return c.redirect(`/surveys/${created.publicId}?created=1`, 303);
