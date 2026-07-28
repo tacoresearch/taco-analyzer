@@ -217,7 +217,7 @@ The consequence worth stating plainly: the database now holds location traces of
 the people doing the collecting, which makes it a more sensitive asset than a pile
 of taco scores. That is part of why the data directory is mode 0700, why the
 database is never served statically, and why how widely coordinates are shown in
-the UI is an open question rather than a default (docs/backlog.md item 1).
+the UI is an open question rather than a default (docs/backlog.md item 2).
 
 **Deviation: metadata is stripped, not re-encoded.** OWASP recommends decoding
 and re-encoding uploads, which destroys polyglots and malformed-chunk decoder

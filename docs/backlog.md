@@ -121,15 +121,80 @@ Specifics worth getting right:
   so nothing currently cleans up photo files on deletion; if survey deletion is
   ever added, it must delete files too (SQLite's ON DELETE CASCADE removes the
   row, not the file on disk).
-- **Do not add a delete-survey button** at the same time. Edit plus trail is
-  recoverable; delete is not, and the two are easy to conflate in a hurry.
+- **Delete is wanted too, but build it after edit, not alongside.** Edit plus
+  trail is recoverable and delete is not, so getting the trail right first means
+  delete can be recorded in it. See item 1a.
 
 Presentation: a `.data-table` under the existing sections on the detail page,
 newest first, reading like "Havell changed Menu price from $14.25 to $3.50 on
 27 Jul 2026". Empty state when a survey has never been edited, so the absence of
 a trail is explicit rather than ambiguous.
 
-## 1. Surface photo GPS coordinates in the survey UI
+## 1a. Delete a survey, behind a real confirmation
+
+Requested. An admin can delete a survey, with an "are you sure" step.
+
+### Prefer a soft delete
+
+Recommended: mark it deleted rather than removing the row. `surveys.status`
+already has a CHECK constraint of `('draft', 'submitted')`, so this is adding
+`'deleted'` (plus `deleted_at` and `deleted_by`) rather than a new concept.
+
+Why soft first:
+
+- A hard delete of a survey cascades away its items, responses, and photo rows,
+  which is precisely the evidence the audit trail in item 1 exists to keep. A
+  trail that says "this was deleted" but cannot say what it contained is barely
+  a trail.
+- Fat-finger recovery costs one UPDATE instead of a restore from backup.
+- Every list, dashboard, and count query then needs a `status = 'submitted'`
+  filter. Most already have one, but **audit them all**, because a missed filter
+  is how a deleted survey reappears in the dashboard totals.
+
+Offer a real purge separately (an admin action on an already-deleted survey, or
+a retention sweep), so the irreversible step is its own deliberate decision.
+
+### The confirmation
+
+**Do not rely on `window.confirm` alone.** It is blocked outright in some
+embedded and mobile browsers, and the `data-confirm` hook currently rendered on
+the destructive admin buttons has no handler at all (see item 0b), so today it
+would silently do nothing.
+
+Make the server the gate:
+
+- `POST /surveys/<id>/delete` renders a confirmation page showing exactly what
+  will go: business name, town, visit date, item name, and the photo count.
+- Deleting requires a second POST carrying a CSRF token from that page.
+- For a survey with photos, or any survey once purge is implemented, require
+  typing the business name to confirm. `deploy/uninstall.sh --purge` already uses
+  that pattern for the same reason: a confirmation you can dismiss by reflex is
+  not a confirmation.
+- A client-side `confirm()` may be layered on top as a convenience, never as the
+  control.
+
+### Purging must delete the files too
+
+**SQLite's `ON DELETE CASCADE` removes the photo rows, not the JPEGs on disk.**
+A hard delete that forgets this leaks exactly the way failed submits used to.
+Collect `storage_name` for the survey's photos *before* deleting rows, then call
+`removeUpload()` from `server/db/pending-photos.js` for each. `prune-orphans`
+will catch anything missed, but it should have nothing to catch.
+
+Also note the FK trap found while cleaning up test data: the `sqlite3` CLI has
+foreign keys **off** by default, so hand-written cleanup SQL orphans child rows
+silently. The app enables them per connection. Any maintenance script must set
+`PRAGMA foreign_keys=ON` and finish with `PRAGMA foreign_key_check`.
+
+### Also
+
+- Admin only. A collector deleting their own submission after the fact defeats
+  the point of collected data.
+- Record the deletion in the audit trail from item 1, including who and why.
+- `users.id` is `ON DELETE RESTRICT` from `surveys`, so deleting a user still
+  will not silently take their surveys with them. Keep it that way.
+
+## 2. Surface photo GPS coordinates in the survey UI
 
 **Status: half done.** Extraction is implemented; display is not.
 
@@ -163,7 +228,7 @@ than silently showing nothing.
 
 ---
 
-## 2. Accept HEIC/HEIF uploads
+## 3. Accept HEIC/HEIF uploads
 
 **Status: currently rejected outright**, with a specific `HEIC_UNSUPPORTED`
 error and a message pointing the user at their camera's format setting.
@@ -184,7 +249,7 @@ Options, cheapest first:
    phone before spending effort. Possibly a non-issue in practice.
 2. Convert client-side before upload: draw the image to a `<canvas>` and export
    JPEG via `toBlob`. This strips all metadata as a side effect (which would
-   conflict with item 1 above unless GPS is read client-side first and posted
+   conflict with item 2 above unless GPS is read client-side first and posted
    alongside). Browser HEIC decode support is inconsistent, so this may not work
    at all on the devices that need it.
 3. Write the ISOBMFF metadata stripper. Most correct, most work, needs careful
@@ -198,7 +263,7 @@ browser's file picker.
 
 ---
 
-## 3. Additional rubrics: business, non-taco items, combined surveys
+## 4. Additional rubrics: business, non-taco items, combined surveys
 
 Explicitly out of scope for v1, but the schema was built for it: a survey is a
 container for one visit and can hold several `survey_items` with differing
@@ -221,7 +286,7 @@ trusting this note. Likely friction points:
 
 ---
 
-## 4. The consistency modifier (rubric Layer 3)
+## 5. The consistency modifier (rubric Layer 3)
 
 The rubric defines a consistency modifier that activates on re-visit, worth up to
 plus or minus 5 percent of the taste score, scaled by visit count. It is not
@@ -238,7 +303,7 @@ with explicit identity is probably a prerequisite.
 
 ---
 
-## 5. Breached-password blocklist
+## 6. Breached-password blocklist
 
 A knowing gap, recorded in docs/security-decisions.md. NIST SP 800-63B requires
 checking new passwords against a list of known-compromised ones. We currently
@@ -252,7 +317,7 @@ more sensitive than taco scores, or if it gains public sign-up.
 
 ---
 
-## 6. Re-encode uploaded images
+## 7. Re-encode uploaded images
 
 Also recorded in docs/security-decisions.md. OWASP recommends decoding and
 re-encoding uploads, which destroys polyglot files and malformed-chunk decoder
@@ -262,11 +327,11 @@ from a non-executable path, and a server-set content type.
 
 Accepted residual risk: a crafted image targeting a browser decoder would pass
 through. Worth closing if uploads are ever accepted from outside the team. This
-overlaps with option 4 in item 2 above; doing both at once is the efficient path.
+overlaps with option 4 in item 3 above; doing both at once is the efficient path.
 
 ---
 
-## 7. Multi-factor authentication
+## 8. Multi-factor authentication
 
 Not built. Its absence is why the password minimum is 15 characters rather than
 8: NIST's shorter minimum applies only when a second factor is present. Adding
