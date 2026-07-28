@@ -82,7 +82,10 @@ ok "database backed up and verified"
 if [[ -d "$UPLOAD_DIR" ]] && [[ -n "$(ls -A "$UPLOAD_DIR" 2>/dev/null || true)" ]]; then
   log "Archiving uploaded photos"
   tar -czf "${DEST}/uploads.tar.gz" -C "$DATA_DIR" uploads
-  ok "photos archived ($(du -h "${DEST}/uploads.tar.gz" | cut -f1))"
+  # --apparent-size, because plain du reports allocated blocks and on a
+  # compressed filesystem (ZFS on Proxmox, for instance) that reads as a
+  # nonsense "512" rather than the real size of the archive.
+  ok "photos archived ($(du -h --apparent-size "${DEST}/uploads.tar.gz" | cut -f1))"
 else
   log "No uploaded photos to archive"
 fi
